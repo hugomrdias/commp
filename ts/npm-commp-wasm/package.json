@@ -1,37 +1,36 @@
 {
-  "name": "@commp/wasm",
-  "version": "0.1.0",
-  "description": "Fast CommP (Filecoin Piece Commitment) WASM implementation",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist",
-    "pkg"
-  ],
-  "scripts": {
-    "build:wasm": "cd ../../rs/commp && wasm-pack build --target web --out-dir ../../ts/npm-commp-wasm/pkg",
-    "build:ts": "tsc",
-    "build": "pnpm build:wasm && pnpm build:ts",
-    "clean": "rm -rf dist pkg"
-  },
-  "keywords": [
-    "filecoin",
-    "commp",
-    "piece-commitment",
-    "wasm",
-    "merkle-tree",
-    "fr32"
-  ],
-  "license": "MIT",
-  "devDependencies": {
-    "typescript": "^5.3.0"
-  }
+	"name": "@commp/wasm",
+	"version": "0.1.0",
+	"description": "Fast CommP (Filecoin Piece Commitment) WASM implementation with inline base64",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build:wasm": "cd ../../rs/commp && wasm-pack build --target bundler --out-dir ../../ts/npm-commp-wasm/pkg-bundler --release",
+		"build:inline": "node ../../scripts/build-inline-wasm.js",
+		"build:ts": "tsc && cp -r src/inline dist/",
+		"build": "pnpm build:wasm && pnpm build:inline && pnpm build:ts",
+		"clean": "rm -rf dist pkg-bundler"
+	},
+	"keywords": [
+		"filecoin",
+		"commp",
+		"piece-commitment",
+		"wasm",
+		"merkle-tree",
+		"fr32"
+	],
+	"license": "MIT",
+	"devDependencies": {
+		"typescript": "^5.3.0"
+	}
 }
-

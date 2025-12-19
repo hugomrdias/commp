@@ -4,12 +4,11 @@
 
 import * as Hasher from "@web3-storage/data-segment/multihash";
 import { Bench, formatNumber } from "tinybench";
-// Inline WASM (no async init, no separate file loading)
+import * as HasherFast from "./ts/npm-commp-js/src/index.js";
 import {
-	CommPHasher,
-	root as inlineRoot,
-} from "./ts/npm-commp-wasm/src/inline/commp_wasm.js";
-import * as HasherFast from "./ts/src/commp/index.js";
+	create as createWasm,
+	root as wasmRoot,
+} from "./ts/npm-commp-wasm/dist/index.js";
 
 const bench = new Bench({ name: "commp", time: 100, iterations: 250 });
 const oneMB = new Uint8Array(1024 * 1024).fill(4);
@@ -27,13 +26,13 @@ async function run() {
 			hasher.digest();
 		})
 		.add("1MB - Rust WASM (inline)", () => {
-			const hasher = new CommPHasher();
+			const hasher = createWasm();
 			hasher.write(oneMB);
-			hasher.root();
+			hasher.digest();
 			hasher.free();
 		})
 		.add("1MB - Rust WASM one-shot", () => {
-			inlineRoot(oneMB);
+			wasmRoot(oneMB);
 		});
 
 	await bench.run();

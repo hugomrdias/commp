@@ -16,17 +16,20 @@ Fast CommP (Filecoin Piece Commitment) implementation in Rust/WASM.
 
 ```javascript
 // Just import and use - no async init needed!
-import { CommPHasher, root } from "@commp/wasm";
+import { create, root, digest } from "@commp/wasm";
 
-// One-shot API
+// One-shot API - just get the 32-byte root
 const data = new Uint8Array(1024 * 1024).fill(0x42);
 const rootHash = root(data); // 32-byte Uint8Array
 
-// Streaming API
-const hasher = new CommPHasher();
+// Streaming API - for large files or chunked data
+const hasher = create();
 hasher.write(chunk1);
 hasher.write(chunk2);
-const result = hasher.root();
+const result = hasher.digest();
+console.log(result.root);    // 32-byte root hash
+console.log(result.height);  // tree height
+console.log(result.padding); // zero-padding added
 hasher.free(); // Free WASM memory when done
 ```
 
@@ -37,16 +40,21 @@ commp/
 ├── rs/commp/                    # Rust WASM crate
 │   ├── Cargo.toml
 │   └── src/lib.rs
-├── ts/npm-commp-wasm/           # TypeScript package
-│   └── src/
-│       ├── index.ts             # Main entry point
-│       └── inline/              # Inline base64 WASM (generated)
-│           ├── commp_wasm.js
-│           ├── commp_wasm_bg.js
-│           └── commp_wasm_bg.wasm.js
+├── ts/
+│   ├── npm-commp-wasm/          # @commp/wasm - Rust WASM package
+│   │   └── src/
+│   │       ├── index.ts         # Main entry point
+│   │       └── inline/          # Inline base64 WASM (generated)
+│   └── npm-commp-js/            # @commp/js - Pure JS package
+│       └── src/
+│           ├── index.js         # Main entry point
+│           └── ...
 ├── scripts/
 │   └── build-inline-wasm.js     # Converts WASM to inline base64
-└── ts/src/commp/                # Pure JS implementation
+├── test/
+│   ├── commp.test.js            # Mocha tests
+│   └── vectors.csv              # Test vectors from storacha/data-segment
+└── bench.js                     # Performance benchmarks
 ```
 
 ## Prerequisites
@@ -135,48 +143,40 @@ Returns the raw **32-byte CommP root hash** (Merkle root of the FR32-padded tree
 
 Use when you only need the hash itself, e.g., for comparisons or storage.
 
-### `digest(data: Uint8Array): Uint8Array`
+### `digest(data: Uint8Array): PieceDigest`
 
-Returns the **full multihash-encoded digest** (~38-40 bytes):
+Returns a `PieceDigest` object with:
 
-```
-[code (varint 0x1011), size (varint), padding (varint), height (u8), root (32 bytes)]
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `number` | `0x1011` - multihash identifier |
+| `name` | `string` | `"fr32-sha2-256-trunc254-padded-binary-tree"` |
+| `bytes` | `Uint8Array` | Full multihash-encoded digest |
+| `digest` | `Uint8Array` | Digest payload (padding + height + root) |
+| `root` | `Uint8Array` | 32-byte Merkle root |
+| `height` | `number` | Tree height (log₂ of leaf count) |
+| `padding` | `number` | Zero-padding bytes added |
 
-| Field | Description |
-|-------|-------------|
-| `code` | `0x1011` - multihash identifier for "fr32-sha256-trunc254-padded-binary-tree" |
-| `size` | Total digest payload size |
-| `padding` | Zero-padding bytes added to reach power-of-two piece size |
-| `height` | Tree height (log₂ of leaf count) |
-| `root` | 32-byte Merkle root |
+### `create(): Hasher`
 
-Use when you need the complete Filecoin piece commitment with metadata for on-chain verification.
+Creates a streaming hasher for processing data in chunks.
 
-### `class CommPHasher`
+#### Hasher methods
 
-Streaming hasher for processing data in chunks.
-
-- `new CommPHasher()` - Create a new hasher
-- `write(data: Uint8Array)` - Write data chunk
-- `root(): Uint8Array` - Get 32-byte root hash
-- `digest(): Uint8Array` - Get full multihash digest
-- `height(): number` - Get tree height
+- `write(data: Uint8Array): this` - Write data chunk
+- `digest(): PieceDigest` - Get full digest result
 - `count(): bigint` - Get bytes written
-- `reset()` - Reset hasher state
-- `free()` - Free WASM memory (call when done)
+- `reset(): this` - Reset hasher state
+- `free(): void` - Free WASM memory (call when done)
 
 ## Testing
 
 ```bash
-# Test correctness against reference implementations
-node commp-wasm-test.js
-
-# Test inline WASM
-node test-inline-wasm.js
+# Run all tests (562 test cases)
+pnpm test
 
 # Run benchmarks
-node tinybench-inline.js
+pnpm bench
 ```
 
 ## How It Works
@@ -208,4 +208,3 @@ Following [@webbuf](https://github.com/identellica/webbuf)'s pattern:
 ## License
 
 MIT
-

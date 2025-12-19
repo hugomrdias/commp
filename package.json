@@ -1,23 +1,23 @@
 {
-  "name": "commp",
-  "version": "1.0.0",
-  "type": "module",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.26.0",
-  "dependencies": {
-    "@noble/hashes": "^2.0.1",
-    "@web3-storage/data-segment": "^5.3.0",
-    "@webbuf/blake3": "^3.5.0",
-    "@webbuf/sha256": "^3.5.0",
-    "@webbuf/webbuf": "^3.5.0",
-    "fr32-sha2-256-trunc254-padded-binary-tree-multihash": "^3.3.0",
-    "tinybench": "^6.0.0"
-  }
+	"name": "commp",
+	"version": "1.0.0",
+	"type": "module",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "mocha 'test/**/*.test.js'",
+		"bench": "node bench.js"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"packageManager": "pnpm@10.26.0",
+	"dependencies": {
+		"@web3-storage/data-segment": "^5.3.0",
+		"@webbuf/sha256": "^3.5.0",
+		"tinybench": "^6.0.0"
+	},
+	"devDependencies": {
+		"mocha": "^11.7.5"
+	}
 }

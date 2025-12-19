@@ -16,7 +16,7 @@ path = "src/bench.rs"
 wasm-bindgen = "0.2"
 # sha2 with default features uses software impl, which is fine for WASM
 # The compress feature enables the low-level compress function for potential optimization
-sha2 = { version = "0.10", default-features = false, features = ["asm"] }
+sha2 = { version = "0.10", default-features = false }
 
 [profile.release]
 # Maximum optimization level
@@ -35,5 +35,5 @@ strip = true
 opt-level = 3
 
 [package.metadata.wasm-pack.profile.release]
-# Maximum wasm-opt optimization with bulk memory
-wasm-opt = ["-O4", "--enable-bulk-memory"]
+# Maximum wasm-opt optimization with bulk memory and SIMD
+wasm-opt = ["-O4", "--enable-bulk-memory", "--enable-simd"]
