@@ -19,9 +19,9 @@ import {
 	MIN_PAYLOAD_SIZE,
 	MULTIHASH_CODE,
 	ROOT_SIZE,
-} from "./constants.js";
-import { readQuadToNodes, toZeroPaddedSize } from "./fr32.js";
-import { build, createLayer, getHeight, getRoot, prune } from "./tree.js";
+} from './constants.js'
+import { readQuadToNodes, toZeroPaddedSize } from './fr32.js'
+import { build, createLayer, getHeight, getRoot, prune } from './tree.js'
 
 /** @import { StreamingHasher, PieceDigest, TreeLayer } from './types.js' */
 
@@ -34,13 +34,13 @@ import { build, createLayer, getHeight, getRoot, prune } from "./tree.js";
  * @returns {number} - Number of bytes written
  */
 function varintEncodeTo(num, buf, offset) {
-	let i = offset;
+	let i = offset
 	while (num >= 0x80) {
-		buf[i++] = (num & 0x7f) | 0x80;
-		num >>>= 7;
+		buf[i++] = (num & 0x7f) | 0x80
+		num >>>= 7
 	}
-	buf[i++] = num;
-	return i - offset;
+	buf[i++] = num
+	return i - offset
 }
 
 /**
@@ -50,23 +50,23 @@ function varintEncodeTo(num, buf, offset) {
  * @returns {number} - Bytes needed
  */
 function varintEncodingLength(num) {
-	let len = 0;
+	let len = 0
 	while (num >= 0x80) {
-		len++;
-		num >>>= 7;
+		len++
+		num >>>= 7
 	}
-	return len + 1;
+	return len + 1
 }
 
-export { MULTIHASH_CODE as code };
+export { MULTIHASH_CODE as code }
 export const name = /** @type {const} */ (
-	"fr32-sha2-256-trunc254-padded-binary-tree"
-);
+	'fr32-sha2-256-trunc254-padded-binary-tree'
+)
 
 /**
  * Maximum digest size in bytes
  */
-export const MAX_DIGEST_SIZE = CODE_SIZE + 10 + 10 + HEIGHT_SIZE + ROOT_SIZE;
+export const MAX_DIGEST_SIZE = CODE_SIZE + 10 + 10 + HEIGHT_SIZE + ROOT_SIZE
 
 /**
  * Computes the required zero padding for a given payload size
@@ -75,10 +75,10 @@ export const MAX_DIGEST_SIZE = CODE_SIZE + 10 + 10 + HEIGHT_SIZE + ROOT_SIZE;
  * @returns {number} - Zero padding required
  */
 function requiredZeroPadding(bytesWritten) {
-	const size = Number(bytesWritten);
-	if (size === 0) return MIN_PAYLOAD_SIZE;
-	const paddedSize = toZeroPaddedSize(size);
-	return paddedSize - size;
+	const size = Number(bytesWritten)
+	if (size === 0) return MIN_PAYLOAD_SIZE
+	const paddedSize = toZeroPaddedSize(size)
+	return paddedSize - size
 }
 
 /**
@@ -104,28 +104,28 @@ class Hasher {
 		 * @private
 		 * @type {bigint}
 		 */
-		this.bytesWritten = 0n;
+		this.bytesWritten = 0n
 
 		/**
 		 * Buffer for accumulating bytes until we have a full quad (127 bytes)
 		 * @private
 		 * @type {Uint8Array}
 		 */
-		this.buffer = new Uint8Array(IN_BYTES_PER_QUAD);
+		this.buffer = new Uint8Array(IN_BYTES_PER_QUAD)
 
 		/**
 		 * Current offset into the buffer
 		 * @private
 		 * @type {number}
 		 */
-		this.offset = 0;
+		this.offset = 0
 
 		/**
 		 * Tree layers - layer 0 contains leaves, higher layers contain internal nodes
 		 * @private
 		 * @type {TreeLayer[]}
 		 */
-		this.layers = [createLayer()];
+		this.layers = [createLayer()]
 	}
 
 	/**
@@ -134,7 +134,7 @@ class Hasher {
 	 * @returns {bigint}
 	 */
 	count() {
-		return this.bytesWritten;
+		return this.bytesWritten
 	}
 
 	/**
@@ -144,50 +144,50 @@ class Hasher {
 	 * @returns {this}
 	 */
 	write(bytes) {
-		const { buffer, layers } = this;
-		const leaves = layers[0];
-		const length = bytes.length;
+		const { buffer, layers } = this
+		const leaves = layers[0]
+		const length = bytes.length
 
 		if (length === 0) {
-			return this;
+			return this
 		}
 
 		// If we don't have enough to form a quad, just buffer
 		if (this.offset + length < IN_BYTES_PER_QUAD) {
-			buffer.set(bytes, this.offset);
-			this.offset += length;
-			this.bytesWritten += BigInt(length);
-			return this;
+			buffer.set(bytes, this.offset)
+			this.offset += length
+			this.bytesWritten += BigInt(length)
+			return this
 		}
 
 		// Fill the buffer to complete a quad
-		const bytesRequired = IN_BYTES_PER_QUAD - this.offset;
-		buffer.set(bytes.subarray(0, bytesRequired), this.offset);
+		const bytesRequired = IN_BYTES_PER_QUAD - this.offset
+		buffer.set(bytes.subarray(0, bytesRequired), this.offset)
 
 		// Process the full quad - this creates 2 leaves
-		readQuadToNodes(buffer, 0, leaves.nodes, leaves.count);
-		leaves.count += 2;
+		readQuadToNodes(buffer, 0, leaves.nodes, leaves.count)
+		leaves.count += 2
 
 		// Process remaining full quads directly from input
-		let readOffset = bytesRequired;
+		let readOffset = bytesRequired
 		while (readOffset + IN_BYTES_PER_QUAD <= length) {
-			readQuadToNodes(bytes, readOffset, leaves.nodes, leaves.count);
-			leaves.count += 2;
-			readOffset += IN_BYTES_PER_QUAD;
+			readQuadToNodes(bytes, readOffset, leaves.nodes, leaves.count)
+			leaves.count += 2
+			readOffset += IN_BYTES_PER_QUAD
 		}
 
 		// Buffer remaining bytes
-		const remaining = length - readOffset;
+		const remaining = length - readOffset
 		if (remaining > 0) {
-			buffer.set(bytes.subarray(readOffset), 0);
+			buffer.set(bytes.subarray(readOffset), 0)
 		}
-		this.offset = remaining;
-		this.bytesWritten += BigInt(length);
+		this.offset = remaining
+		this.bytesWritten += BigInt(length)
 
 		// Prune the tree to keep memory usage low
-		prune(layers);
+		prune(layers)
 
-		return this;
+		return this
 	}
 
 	/**
@@ -196,60 +196,60 @@ class Hasher {
 	 * @returns {PieceDigest}
 	 */
 	digest() {
-		const { buffer, layers, offset, bytesWritten } = this;
+		const { buffer, layers, offset, bytesWritten } = this
 
 		// Clone layers for building
 		/** @type {TreeLayer[]} */
 		let buildLayers = layers.map((layer) => ({
 			nodes: [...layer.nodes],
 			count: layer.count,
-		}));
+		}))
 
-		const leaves = buildLayers[0];
+		const leaves = buildLayers[0]
 
 		// If we have buffered bytes or no data written, process final quad
 		if (offset > 0 || bytesWritten === 0n) {
 			// Fill rest of buffer with zeros
-			buffer.fill(0, offset);
-			readQuadToNodes(buffer, 0, leaves.nodes, leaves.count);
-			leaves.count += 2;
+			buffer.fill(0, offset)
+			readQuadToNodes(buffer, 0, leaves.nodes, leaves.count)
+			leaves.count += 2
 		}
 
 		// Build the complete tree
-		buildLayers = build(buildLayers);
+		buildLayers = build(buildLayers)
 
-		const height = getHeight(buildLayers);
-		const root = getRoot(buildLayers);
-		const padding = requiredZeroPadding(bytesWritten);
+		const height = getHeight(buildLayers)
+		const root = getRoot(buildLayers)
+		const padding = requiredZeroPadding(bytesWritten)
 
 		// Calculate multihash size
-		const paddingLength = varintEncodingLength(padding);
-		const digestSize = paddingLength + HEIGHT_SIZE + ROOT_SIZE;
-		const digestSizeLength = varintEncodingLength(digestSize);
-		const totalSize = CODE_SIZE + digestSizeLength + digestSize;
+		const paddingLength = varintEncodingLength(padding)
+		const digestSize = paddingLength + HEIGHT_SIZE + ROOT_SIZE
+		const digestSizeLength = varintEncodingLength(digestSize)
+		const totalSize = CODE_SIZE + digestSizeLength + digestSize
 
 		// Build the multihash bytes
-		const bytes = new Uint8Array(totalSize);
-		let pos = 0;
+		const bytes = new Uint8Array(totalSize)
+		let pos = 0
 
 		// Write code
-		pos += varintEncodeTo(MULTIHASH_CODE, bytes, pos);
+		pos += varintEncodeTo(MULTIHASH_CODE, bytes, pos)
 
 		// Write digest size
-		pos += varintEncodeTo(digestSize, bytes, pos);
+		pos += varintEncodeTo(digestSize, bytes, pos)
 
 		// Write padding
-		pos += varintEncodeTo(padding, bytes, pos);
+		pos += varintEncodeTo(padding, bytes, pos)
 
 		// Write height
-		bytes[pos] = height;
-		pos += HEIGHT_SIZE;
+		bytes[pos] = height
+		pos += HEIGHT_SIZE
 
 		// Write root
-		bytes.set(root, pos);
+		bytes.set(root, pos)
 
 		// Extract raw digest (padding + height + root)
-		const digest = bytes.subarray(CODE_SIZE + digestSizeLength);
+		const digest = bytes.subarray(CODE_SIZE + digestSizeLength)
 
 		return {
 			code: MULTIHASH_CODE,
@@ -259,7 +259,7 @@ class Hasher {
 			height,
 			root,
 			padding,
-		};
+		}
 	}
 
 	/**
@@ -268,17 +268,17 @@ class Hasher {
 	 * @returns {this}
 	 */
 	reset() {
-		this.offset = 0;
-		this.bytesWritten = 0n;
-		this.layers = [createLayer()];
-		return this;
+		this.offset = 0
+		this.bytesWritten = 0n
+		this.layers = [createLayer()]
+		return this
 	}
 
 	/**
 	 * Dispose of resources (for compatibility)
 	 */
 	dispose() {
-		this.reset();
+		this.reset()
 	}
 }
 
@@ -302,7 +302,7 @@ class Hasher {
  * @returns {Hasher}
  */
 export function create() {
-	return new Hasher();
+	return new Hasher()
 }
 
 /**
@@ -321,9 +321,9 @@ export function create() {
  * @returns {PieceDigest}
  */
 export function digest(payload) {
-	const hasher = create();
-	hasher.write(payload);
-	return hasher.digest();
+	const hasher = create()
+	hasher.write(payload)
+	return hasher.digest()
 }
 
 // Re-export constants for consumers
@@ -333,6 +333,6 @@ export {
 	MIN_PAYLOAD_SIZE,
 	NODE_SIZE,
 	ROOT_SIZE,
-} from "./constants.js";
+} from './constants.js'
 
-export { MAX_DIGEST_SIZE as MAX_SIZE };
+export { MAX_DIGEST_SIZE as MAX_SIZE }

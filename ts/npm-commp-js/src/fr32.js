@@ -9,10 +9,10 @@
  */
 
 import {
-  FR_RATIO,
-  MIN_PAYLOAD_SIZE,
-  NODE_SIZE,
-  OUT_BYTES_PER_QUAD,
+	FR_RATIO,
+	MIN_PAYLOAD_SIZE,
+	NODE_SIZE,
+	OUT_BYTES_PER_QUAD,
 } from './constants.js'
 import { truncatedHash } from './hash.js'
 
@@ -33,31 +33,31 @@ const FR32_BUFFER = new Uint8Array(OUT_BYTES_PER_QUAD)
  * @param {Uint8Array} output - 128-byte output buffer
  */
 export function fr32PadInto(source, offset, output) {
-  // First 31 bytes + 6 bits are taken as-is
-  for (let i = 0; i < 32; i++) {
-    output[i] = source[offset + i]
-  }
-  // First 2-bit shim: clear top 2 bits
-  output[31] &= 0b00111111
+	// First 31 bytes + 6 bits are taken as-is
+	for (let i = 0; i < 32; i++) {
+		output[i] = source[offset + i]
+	}
+	// First 2-bit shim: clear top 2 bits
+	output[31] &= 0b00111111
 
-  // Second Fr: shift by 2 bits, combine with previous byte's top 6 bits
-  for (let i = 32; i < 64; i++) {
-    output[i] = (source[offset + i] << 2) | (source[offset + i - 1] >> 6)
-  }
-  output[63] &= 0b00111111
+	// Second Fr: shift by 2 bits, combine with previous byte's top 6 bits
+	for (let i = 32; i < 64; i++) {
+		output[i] = (source[offset + i] << 2) | (source[offset + i - 1] >> 6)
+	}
+	output[63] &= 0b00111111
 
-  // Third Fr: shift by 4 bits
-  for (let i = 64; i < 96; i++) {
-    output[i] = (source[offset + i] << 4) | (source[offset + i - 1] >> 4)
-  }
-  output[95] &= 0b00111111
+	// Third Fr: shift by 4 bits
+	for (let i = 64; i < 96; i++) {
+		output[i] = (source[offset + i] << 4) | (source[offset + i - 1] >> 4)
+	}
+	output[95] &= 0b00111111
 
-  // Fourth Fr: shift by 6 bits
-  for (let i = 96; i < 127; i++) {
-    output[i] = (source[offset + i] << 6) | (source[offset + i - 1] >> 2)
-  }
-  // Last byte: just the top 6 bits of byte 126
-  output[127] = source[offset + 126] >> 2
+	// Fourth Fr: shift by 6 bits
+	for (let i = 96; i < 127; i++) {
+		output[i] = (source[offset + i] << 6) | (source[offset + i - 1] >> 2)
+	}
+	// Last byte: just the top 6 bits of byte 126
+	output[127] = source[offset + 126] >> 2
 }
 
 /**
@@ -80,16 +80,16 @@ export function fr32PadInto(source, offset, output) {
  * @param {number} leafOffset - Byte offset into leaves buffer where to write
  */
 export function readQuad(source, sourceOffset, leaves, leafOffset) {
-  // FR32 pad into reusable buffer
-  fr32PadInto(source, sourceOffset, FR32_BUFFER)
+	// FR32 pad into reusable buffer
+	fr32PadInto(source, sourceOffset, FR32_BUFFER)
 
-  // Hash first 64 bytes → leaf 1
-  const leaf1 = truncatedHash(FR32_BUFFER.subarray(0, 64))
-  leaves.set(leaf1, leafOffset)
+	// Hash first 64 bytes → leaf 1
+	const leaf1 = truncatedHash(FR32_BUFFER.subarray(0, 64))
+	leaves.set(leaf1, leafOffset)
 
-  // Hash last 64 bytes → leaf 2
-  const leaf2 = truncatedHash(FR32_BUFFER.subarray(64, 128))
-  leaves.set(leaf2, leafOffset + NODE_SIZE)
+	// Hash last 64 bytes → leaf 2
+	const leaf2 = truncatedHash(FR32_BUFFER.subarray(64, 128))
+	leaves.set(leaf2, leafOffset + NODE_SIZE)
 }
 
 /**
@@ -102,14 +102,14 @@ export function readQuad(source, sourceOffset, leaves, leafOffset) {
  * @param {number} nodeIndex - Starting index in nodes array
  */
 export function readQuadToNodes(source, sourceOffset, nodes, nodeIndex) {
-  // FR32 pad into reusable buffer
-  fr32PadInto(source, sourceOffset, FR32_BUFFER)
+	// FR32 pad into reusable buffer
+	fr32PadInto(source, sourceOffset, FR32_BUFFER)
 
-  // Hash first 64 bytes → leaf 1
-  nodes[nodeIndex] = truncatedHash(FR32_BUFFER.subarray(0, 64))
+	// Hash first 64 bytes → leaf 1
+	nodes[nodeIndex] = truncatedHash(FR32_BUFFER.subarray(0, 64))
 
-  // Hash last 64 bytes → leaf 2
-  nodes[nodeIndex + 1] = truncatedHash(FR32_BUFFER.subarray(64, 128))
+	// Hash last 64 bytes → leaf 2
+	nodes[nodeIndex + 1] = truncatedHash(FR32_BUFFER.subarray(64, 128))
 }
 
 /**
@@ -119,10 +119,10 @@ export function readQuadToNodes(source, sourceOffset, nodes, nodeIndex) {
  * @returns {number} - Zero-padded size (multiple of 127)
  */
 export function toZeroPaddedSize(payloadSize) {
-  const size = Math.max(payloadSize, MIN_PAYLOAD_SIZE)
-  const highestBit = Math.floor(Math.log2(size))
-  const bound = Math.ceil(FR_RATIO * 2 ** (highestBit + 1))
-  return size <= bound ? bound : Math.ceil(FR_RATIO * 2 ** (highestBit + 2))
+	const size = Math.max(payloadSize, MIN_PAYLOAD_SIZE)
+	const highestBit = Math.floor(Math.log2(size))
+	const bound = Math.ceil(FR_RATIO * 2 ** (highestBit + 1))
+	return size <= bound ? bound : Math.ceil(FR_RATIO * 2 ** (highestBit + 2))
 }
 
 /**
@@ -132,5 +132,5 @@ export function toZeroPaddedSize(payloadSize) {
  * @returns {number} - Piece size after FR32 expansion
  */
 export function toPieceSize(size) {
-  return toZeroPaddedSize(size) / FR_RATIO
+	return toZeroPaddedSize(size) / FR_RATIO
 }

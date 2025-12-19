@@ -17,12 +17,12 @@ export const OUT_BITS_FR = 256
 
 /** Input bytes per quad: 127 bytes (4 * 254 bits / 8) */
 export const IN_BYTES_PER_QUAD = /** @type {127} */ (
-  (FRS_PER_QUAD * IN_BITS_FR) / BITS_PER_BYTE
+	(FRS_PER_QUAD * IN_BITS_FR) / BITS_PER_BYTE
 )
 
 /** Output bytes per quad after FR32 padding: 128 bytes (4 * 256 bits / 8) */
 export const OUT_BYTES_PER_QUAD = /** @type {128} */ (
-  (FRS_PER_QUAD * OUT_BITS_FR) / BITS_PER_BYTE
+	(FRS_PER_QUAD * OUT_BITS_FR) / BITS_PER_BYTE
 )
 
 /** Size of a merkle tree node in bytes (32 bytes) */
