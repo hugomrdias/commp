@@ -69,7 +69,7 @@ let modifiedBgJs = bgJs
 
 // Add setter for wasm if not present
 if (!modifiedBgJs.includes('__wbg_set_wasm')) {
-	modifiedBgJs = `let wasm;
+  modifiedBgJs = `let wasm;
 export function __wbg_set_wasm(val) {
   wasm = val;
 }

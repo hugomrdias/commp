@@ -25,6 +25,14 @@ importers:
         specifier: ^11.7.5
         version: 11.7.5
 
+  ts/npm-commp-js:
+    dependencies:
+      '@webbuf/sha256':
+        specifier: ^3.5.0
+        version: 3.5.0(@webbuf/fixedbuf@3.5.0(@webbuf/webbuf@3.5.0))(@webbuf/webbuf@3.5.0)
+
+  ts/npm-commp-wasm: {}
+
 packages:
 
   '@biomejs/biome@2.3.10':

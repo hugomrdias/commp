@@ -23,11 +23,11 @@ export const CONCAT_BUFFER = new Uint8Array(NODE_SIZE * 2)
  * @returns {Uint8Array} - 32-byte truncated hash (new allocation)
  */
 export function truncatedHash(data) {
-	// @ts-expect-error
-	const hash = sha256Hash(data)
-	const result = new Uint8Array(NODE_SIZE)
-	result.set(hash._buf, 0)
-	// Truncate: clear top 2 bits of last byte for field element representation
-	result[NODE_SIZE - 1] &= 0b00111111
-	return result
+  // @ts-expect-error
+  const hash = sha256Hash(data)
+  const result = new Uint8Array(NODE_SIZE)
+  result.set(hash._buf, 0)
+  // Truncate: clear top 2 bits of last byte for field element representation
+  result[NODE_SIZE - 1] &= 0b00111111
+  return result
 }

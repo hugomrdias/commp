@@ -8,8 +8,8 @@
  */
 
 import {
-	CommPHasher as WasmHasher,
-	root as wasmRoot,
+  CommPHasher as WasmHasher,
+  root as wasmRoot,
 } from './inline/commp_wasm.js'
 
 /** @import { PieceDigest, StreamingHasher } from './types.js' */
@@ -19,7 +19,7 @@ export const code = 0x1011
 
 /** Multihash name */
 export const name = /** @type {const} */ (
-	'fr32-sha2-256-trunc254-padded-binary-tree'
+  'fr32-sha2-256-trunc254-padded-binary-tree'
 )
 
 /**
@@ -39,102 +39,102 @@ export const name = /** @type {const} */ (
  * @implements {StreamingHasher}
  */
 class Hasher {
-	constructor() {
-		/**
-		 * @private
-		 * @type {WasmHasher}
-		 */
-		this.inner = new WasmHasher()
-	}
+  constructor() {
+    /**
+     * @private
+     * @type {WasmHasher}
+     */
+    this.inner = new WasmHasher()
+  }
 
-	/**
-	 * Get the total number of bytes written
-	 *
-	 * @returns {bigint}
-	 */
-	count() {
-		return BigInt(this.inner.count())
-	}
+  /**
+   * Get the total number of bytes written
+   *
+   * @returns {bigint}
+   */
+  count() {
+    return BigInt(this.inner.count())
+  }
 
-	/**
-	 * Write bytes into the hasher
-	 *
-	 * @param {Uint8Array} bytes - Bytes to write
-	 * @returns {this}
-	 */
-	write(bytes) {
-		this.inner.write(bytes)
-		return this
-	}
+  /**
+   * Write bytes into the hasher
+   *
+   * @param {Uint8Array} bytes - Bytes to write
+   * @returns {this}
+   */
+  write(bytes) {
+    this.inner.write(bytes)
+    return this
+  }
 
-	/**
-	 * Compute the digest
-	 *
-	 * @returns {PieceDigest}
-	 */
-	digest() {
-		const bytes = this.inner.digest()
-		const root = this.inner.root()
-		const height = this.inner.height()
+  /**
+   * Compute the digest
+   *
+   * @returns {PieceDigest}
+   */
+  digest() {
+    const bytes = this.inner.digest()
+    const root = this.inner.root()
+    const height = this.inner.height()
 
-		// Parse padding from multihash bytes
-		// Format: code (varint) | size (varint) | padding (varint) | height | root
-		let pos = 0
-		// Skip code
-		while (bytes[pos] & 0x80) pos++
-		pos++
-		// Skip size
-		while (bytes[pos] & 0x80) pos++
-		pos++
-		// Read padding
-		let padding = 0
-		let shift = 0
-		while (bytes[pos] & 0x80) {
-			padding |= (bytes[pos] & 0x7f) << shift
-			shift += 7
-			pos++
-		}
-		padding |= bytes[pos] << shift
-		pos++
+    // Parse padding from multihash bytes
+    // Format: code (varint) | size (varint) | padding (varint) | height | root
+    let pos = 0
+    // Skip code
+    while (bytes[pos] & 0x80) pos++
+    pos++
+    // Skip size
+    while (bytes[pos] & 0x80) pos++
+    pos++
+    // Read padding
+    let padding = 0
+    let shift = 0
+    while (bytes[pos] & 0x80) {
+      padding |= (bytes[pos] & 0x7f) << shift
+      shift += 7
+      pos++
+    }
+    padding |= bytes[pos] << shift
+    pos++
 
-		// Digest is from pos-padding_len to end
-		const digestStart = pos - (shift / 7 + 1)
-		const digest = bytes.slice(digestStart)
+    // Digest is from pos-padding_len to end
+    const digestStart = pos - (shift / 7 + 1)
+    const digest = bytes.slice(digestStart)
 
-		return {
-			code,
-			name,
-			digest: new Uint8Array(digest),
-			bytes: new Uint8Array(bytes),
-			height,
-			root: new Uint8Array(root),
-			padding,
-		}
-	}
+    return {
+      code,
+      name,
+      digest: new Uint8Array(digest),
+      bytes: new Uint8Array(bytes),
+      height,
+      root: new Uint8Array(root),
+      padding,
+    }
+  }
 
-	/**
-	 * Reset the hasher to initial state
-	 *
-	 * @returns {this}
-	 */
-	reset() {
-		this.inner.reset()
-		return this
-	}
+  /**
+   * Reset the hasher to initial state
+   *
+   * @returns {this}
+   */
+  reset() {
+    this.inner.reset()
+    return this
+  }
 
-	/**
-	 * Dispose of resources
-	 */
-	dispose() {
-		this.inner.free()
-	}
+  /**
+   * Dispose of resources
+   */
+  dispose() {
+    this.inner.free()
+  }
 
-	/**
-	 * Free WASM resources (alias for dispose)
-	 */
-	free() {
-		this.inner.free()
-	}
+  /**
+   * Free WASM resources (alias for dispose)
+   */
+  free() {
+    this.inner.free()
+  }
 }
 
 /**
@@ -157,7 +157,7 @@ class Hasher {
  * @returns {Hasher}
  */
 export function create() {
-	return new Hasher()
+  return new Hasher()
 }
 
 /**
@@ -176,11 +176,11 @@ export function create() {
  * @returns {PieceDigest}
  */
 export function digest(payload) {
-	const hasher = create()
-	hasher.write(payload)
-	const result = hasher.digest()
-	hasher.free()
-	return result
+  const hasher = create()
+  hasher.write(payload)
+  const result = hasher.digest()
+  hasher.free()
+  return result
 }
 
 /**
@@ -199,7 +199,7 @@ export function digest(payload) {
  * @returns {Uint8Array}
  */
 export function root(payload) {
-	return new Uint8Array(wasmRoot(payload))
+  return new Uint8Array(wasmRoot(payload))
 }
 
 // Re-export constants

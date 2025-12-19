@@ -1,28 +1,28 @@
 {
-	"name": "@commp/js",
-	"version": "0.1.0",
-	"description": "Fast CommP (Filecoin Piece Commitment) pure JavaScript implementation",
-	"type": "module",
-	"main": "./src/index.js",
-	"types": "./src/types.ts",
-	"exports": {
-		".": {
-			"types": "./src/types.ts",
-			"import": "./src/index.js"
-		}
-	},
-	"files": [
-		"src"
-	],
-	"keywords": [
-		"filecoin",
-		"commp",
-		"piece-commitment",
-		"merkle-tree",
-		"fr32"
-	],
-	"license": "MIT",
-	"dependencies": {
-		"@webbuf/sha256": "^3.5.0"
-	}
+  "name": "@commp/js",
+  "version": "0.1.0",
+  "description": "Fast CommP (Filecoin Piece Commitment) pure JavaScript implementation",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/types.ts",
+  "exports": {
+    ".": {
+      "types": "./src/types.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "filecoin",
+    "commp",
+    "piece-commitment",
+    "merkle-tree",
+    "fr32"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@webbuf/sha256": "^3.5.0"
+  }
 }

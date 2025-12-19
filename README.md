@@ -35,7 +35,7 @@ hasher.free(); // Free WASM memory when done
 
 ## Project Structure
 
-```
+```text
 commp/
 ├── rs/commp/                    # Rust WASM crate
 │   ├── Cargo.toml
@@ -93,7 +93,8 @@ node scripts/build-inline-wasm.js
 ```
 
 Output:
-```
+
+```text
 WASM binary size: 33508 bytes
 Base64 size: 44680 chars
 Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js
