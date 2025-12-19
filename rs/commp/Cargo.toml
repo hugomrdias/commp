@@ -1,0 +1,39 @@
+[package]
+name = "commp-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "Fast CommP (Filecoin Piece Commitment) implementation for WASM"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "bench"
+path = "src/bench.rs"
+
+[dependencies]
+wasm-bindgen = "0.2"
+# sha2 with default features uses software impl, which is fine for WASM
+# The compress feature enables the low-level compress function for potential optimization
+sha2 = { version = "0.10", default-features = false, features = ["asm"] }
+
+[profile.release]
+# Maximum optimization level
+opt-level = 3
+# Link-time optimization for smaller, faster code
+lto = "fat"
+# Single codegen unit for better optimization across the whole crate
+codegen-units = 1
+# Strip debug symbols
+strip = true
+# Optimize for size can sometimes help with WASM cache efficiency
+# Uncomment if you prefer smaller size over raw speed:
+# opt-level = "z"
+
+[profile.release.package."*"]
+opt-level = 3
+
+[package.metadata.wasm-pack.profile.release]
+# Maximum wasm-opt optimization with bulk memory
+wasm-opt = ["-O4", "--enable-bulk-memory"]

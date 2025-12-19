@@ -1,0 +1,134 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^2.0.1
+        version: 2.0.1
+      '@web3-storage/data-segment':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@webbuf/blake3':
+        specifier: ^3.5.0
+        version: 3.5.0(@webbuf/fixedbuf@3.5.0(@webbuf/webbuf@3.5.0))(@webbuf/webbuf@3.5.0)
+      '@webbuf/sha256':
+        specifier: ^3.5.0
+        version: 3.5.0(@webbuf/fixedbuf@3.5.0(@webbuf/webbuf@3.5.0))(@webbuf/webbuf@3.5.0)
+      '@webbuf/webbuf':
+        specifier: ^3.5.0
+        version: 3.5.0
+      fr32-sha2-256-trunc254-padded-binary-tree-multihash:
+        specifier: ^3.3.0
+        version: 3.3.0
+      tinybench:
+        specifier: ^6.0.0
+        version: 6.0.0
+
+packages:
+
+  '@ipld/dag-cbor@9.2.5':
+    resolution: {integrity: sha512-84wSr4jv30biui7endhobYhXBQzQE4c/wdoWlFrKcfiwH+ofaPg8fwsM8okX9cOzkkrsAsNdDyH3ou+kiLquwQ==}
+    engines: {node: '>=16.0.0', npm: '>=7.0.0'}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@2.0.1':
+    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
+    engines: {node: '>= 20.19.0'}
+
+  '@web3-storage/data-segment@5.3.0':
+    resolution: {integrity: sha512-zFJ4m+pEKqtKatJNsFrk/2lHeFSbkXZ6KKXjBe7/2ayA9wAar7T/unewnOcZrrZTnCWmaxKsXWqdMFy9bXK9dw==}
+
+  '@webbuf/blake3@3.5.0':
+    resolution: {integrity: sha512-+QiV1Fo70aSzS2M/xyJwatOHwtpnqkUMLjIMd5Iom8UEHCiovfaxZM94yopCBYw5Lda0tMSXyKTcMcyqIWbRlg==}
+    engines: {node: '>=20.8.0'}
+    peerDependencies:
+      '@webbuf/fixedbuf': ^3.5.0
+      '@webbuf/webbuf': ^3.5.0
+
+  '@webbuf/fixedbuf@3.5.0':
+    resolution: {integrity: sha512-feVXv+K4dHLNq7iGTj5uzQ/S/+cFLak0MmeRz8hZne//B+vUnX6g+Z19Z7I2T0TLIFvYZEZS14ttry7N8AWgOg==}
+    engines: {node: '>=20.8.0'}
+    peerDependencies:
+      '@webbuf/webbuf': ^3.5.0
+
+  '@webbuf/sha256@3.5.0':
+    resolution: {integrity: sha512-WlH1pkPy30m2NcnDzY2cgBOrgCsCD3CQZC59RBVzR425dH5aNsodC++Jg9vLIokbhM2/DDioSRbQvOOZhaKOcg==}
+    engines: {node: '>=20.8.0'}
+    peerDependencies:
+      '@webbuf/fixedbuf': ^3.5.0
+      '@webbuf/webbuf': ^3.5.0
+
+  '@webbuf/webbuf@3.5.0':
+    resolution: {integrity: sha512-gYM5+dALPnNqXDchqwStnp8KC6xMCv1zQ2UEggQdFRzberIaKKylbKK53HBNwnpoljVEndn9msD7TZAN5oJVQw==}
+    engines: {node: '>=20.8.0'}
+
+  cborg@4.3.2:
+    resolution: {integrity: sha512-l+QzebEAG0vb09YKkaOrMi2zmm80UNjmbvocMIeW5hO7JOXWdrQ/H49yOKfYX0MBgrj/KWgatBnEgRXyNyKD+A==}
+    hasBin: true
+
+  fr32-sha2-256-trunc254-padded-binary-tree-multihash@3.3.0:
+    resolution: {integrity: sha512-O11VDxPmPvbQj5eac2BJXyieNacyd+RCMhwOzXQQM/NCI25x3c32YWB4/JwgOWPCpKnNXF6lpK/j0lj7GWOnYQ==}
+
+  multiformats@13.4.2:
+    resolution: {integrity: sha512-eh6eHCrRi1+POZ3dA+Dq1C6jhP1GNtr9CRINMb67OKzqW9I5DUuZM/3jLPlzhgpGeiNUlEGEbkCYChXMCc/8DQ==}
+
+  sync-multihash-sha2@1.0.0:
+    resolution: {integrity: sha512-A5gVpmtKF0ov+/XID0M0QRJqF2QxAsj3x/LlDC8yivzgoYCoWkV+XaZPfVu7Vj1T/hYzYS1tfjwboSbXjqocug==}
+
+  tinybench@6.0.0:
+    resolution: {integrity: sha512-BWlWpVbbZXaYjRV0twGLNQO00Zj4HA/sjLOQP2IvzQqGwRGp+2kh7UU3ijyJ3ywFRogYDRbiHDMrUOfaMnN56g==}
+    engines: {node: '>=20.0.0'}
+
+snapshots:
+
+  '@ipld/dag-cbor@9.2.5':
+    dependencies:
+      cborg: 4.3.2
+      multiformats: 13.4.2
+
+  '@noble/hashes@1.8.0': {}
+
+  '@noble/hashes@2.0.1': {}
+
+  '@web3-storage/data-segment@5.3.0':
+    dependencies:
+      '@ipld/dag-cbor': 9.2.5
+      multiformats: 13.4.2
+      sync-multihash-sha2: 1.0.0
+
+  '@webbuf/blake3@3.5.0(@webbuf/fixedbuf@3.5.0(@webbuf/webbuf@3.5.0))(@webbuf/webbuf@3.5.0)':
+    dependencies:
+      '@webbuf/fixedbuf': 3.5.0(@webbuf/webbuf@3.5.0)
+      '@webbuf/webbuf': 3.5.0
+
+  '@webbuf/fixedbuf@3.5.0(@webbuf/webbuf@3.5.0)':
+    dependencies:
+      '@webbuf/webbuf': 3.5.0
+
+  '@webbuf/sha256@3.5.0(@webbuf/fixedbuf@3.5.0(@webbuf/webbuf@3.5.0))(@webbuf/webbuf@3.5.0)':
+    dependencies:
+      '@webbuf/fixedbuf': 3.5.0(@webbuf/webbuf@3.5.0)
+      '@webbuf/webbuf': 3.5.0
+
+  '@webbuf/webbuf@3.5.0': {}
+
+  cborg@4.3.2: {}
+
+  fr32-sha2-256-trunc254-padded-binary-tree-multihash@3.3.0: {}
+
+  multiformats@13.4.2: {}
+
+  sync-multihash-sha2@1.0.0:
+    dependencies:
+      '@noble/hashes': 1.8.0
+
+  tinybench@6.0.0: {}
