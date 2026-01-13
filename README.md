@@ -2,15 +2,26 @@
 
 Fast CommP (Filecoin Piece Commitment) implementation in Rust/WASM.
 
-**~4.5x faster** than the original JavaScript implementation, with inline base64 WASM for zero-config usage.
+Up to **~10x faster** than the original JavaScript implementation, with inline base64 WASM for zero-config usage.
 
 ## Benchmarks
+
+### Node
 
 | Implementation | MiB/s | Speedup |
 |---|---|---|
 | Original JS (`@web3-storage/data-segment`) | 13.8 | 1.00x |
-| Fast JS (`@webbuf/sha256`) | 38.3 | 2.76x |
-| **Rust WASM (inline base64)** | **63.0** | **4.55x** |
+| Fast JS (`@webbuf/sha256`) | 40.5 | 2.90x |
+| **Rust WASM (inline base64)** | **81.2** | **5.81x** |
+
+### Chrome
+
+| Implementation | MiB/s | Speedup |
+| --- | --- | --- |
+| Original JS (`@web3-storage/data-segment`) | 7.9 | 1.00x |
+| Fast JS (`@webbuf/sha256`) | 42.0 | 5.33x |
+| **Rust WASM (inline base64)** | **82.0** | **10.40x** |
+
 
 ## Quick Start
 
