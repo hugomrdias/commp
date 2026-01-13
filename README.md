@@ -95,8 +95,8 @@ node scripts/build-inline-wasm.js
 Output:
 
 ```text
-WASM binary size: 33508 bytes
-Base64 size: 44680 chars
+WASM binary size: 32613 bytes
+Base64 size: 43484 chars
 Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js
 Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.js
 Created: ts/npm-commp-wasm/src/inline/commp_wasm.js
@@ -205,6 +205,7 @@ Following [@webbuf](https://github.com/identellica/webbuf)'s pattern:
 - [go-fil-commp-hashhash](https://github.com/filecoin-project/go-fil-commp-hashhash) - Go implementation
 - [@web3-storage/data-segment](https://github.com/storacha/data-segment) - Original JS implementation
 - [webbuf](https://github.com/identellica/webbuf) - Inline base64 WASM pattern
+- [rust-hashes issue](https://github.com/RustCrypto/hashes/issues/327) - sha256 backends
 
 ## License
 
