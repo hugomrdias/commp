@@ -11,6 +11,7 @@ import {
   CommPHasher as WasmHasher,
   root as wasmRoot,
 } from './inline/commp_wasm.js'
+import { decode as varintDecode } from './varint.js'
 
 /** @import { PieceDigest, StreamingHasher } from './types.js' */
 
@@ -73,41 +74,20 @@ class Hasher {
    * @returns {PieceDigest}
    */
   digest() {
-    const bytes = this.inner.digest()
-    const root = this.inner.root()
-    const height = this.inner.height()
-
-    // Parse padding from multihash bytes
     // Format: code (varint) | size (varint) | padding (varint) | height | root
-    let pos = 0
-    // Skip code
-    while (bytes[pos] & 0x80) pos++
-    pos++
-    // Skip size
-    while (bytes[pos] & 0x80) pos++
-    pos++
-    // Read padding
-    let padding = 0
-    let shift = 0
-    while (bytes[pos] & 0x80) {
-      padding |= (bytes[pos] & 0x7f) << shift
-      shift += 7
-      pos++
-    }
-    padding |= bytes[pos] << shift
-    pos++
-
-    // Digest is from pos-padding_len to end
-    const digestStart = pos - (shift / 7 + 1)
-    const digest = bytes.slice(digestStart)
+    const bytes = this.inner.digest()
+    const [, codeLength] = varintDecode(bytes, 0)
+    const [, sizeLength] = varintDecode(bytes, codeLength)
+    const digestStart = codeLength + sizeLength
+    const [padding] = varintDecode(bytes, digestStart)
 
     return {
       code,
       name,
-      digest: new Uint8Array(digest),
-      bytes: new Uint8Array(bytes),
-      height,
-      root: new Uint8Array(root),
+      digest: bytes.subarray(digestStart),
+      bytes,
+      height: bytes[bytes.length - ROOT_SIZE - HEIGHT_SIZE],
+      root: bytes.slice(-ROOT_SIZE),
       padding,
     }
   }

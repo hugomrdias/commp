@@ -18,9 +18,6 @@ const IN_BYTES_PER_QUAD: usize = 127;
 /// Output bytes per quad after FR32 padding (128 bytes)
 const OUT_BYTES_PER_QUAD: usize = 128;
 
-/// Minimum payload size (65 bytes)
-const MIN_PAYLOAD_SIZE: usize = 65;
-
 /// Maximum tree levels
 const MAX_LEVEL: usize = 64;
 
@@ -102,30 +99,17 @@ fn compute_node_into(left: &[u8; NODE_SIZE], right: &[u8; NODE_SIZE], concat: &m
     truncated_hash_64(concat)
 }
 
-/// Calculate zero-padded size for a payload using integer math only
-/// 
-/// This replaces the floating-point calculation with pure integer operations
-/// for better performance and determinism.
+/// Zero padding needed to round a payload up to a power-of-two number of quads
+///
+/// Matches `Unpadded.toPadding` in data-segment and `unpaddedToPadding` in
+/// synapse-core. Computed in `u64` so it can't overflow on wasm32.
 #[inline]
-fn to_zero_padded_size(payload_size: usize) -> usize {
-    let size = payload_size.max(MIN_PAYLOAD_SIZE);
-    
-    // Find highest set bit (equivalent to floor(log2(size)))
-    let highest_bit = (usize::BITS - size.leading_zeros() - 1) as usize;
-    
-    // FR_RATIO = 254/256 ≈ 0.9921875
-    // bound = ceil(254/256 * 2^(highest_bit + 1))
-    //       = ceil(254 * 2^highest_bit / 128)
-    //       = (254 * 2^highest_bit + 127) / 128  (integer ceil)
-    let power = 1usize << highest_bit;
-    let bound = (254 * power + 127) / 128;
-    
-    if size <= bound {
-        bound
-    } else {
-        // bound2 = ceil(254/256 * 2^(highest_bit + 2))
-        (254 * power * 2 + 127) / 128
-    }
+fn zero_padding(payload_size: u64) -> u64 {
+    let quads = payload_size
+        .div_ceil(IN_BYTES_PER_QUAD as u64)
+        .max(1)
+        .next_power_of_two();
+    quads * IN_BYTES_PER_QUAD as u64 - payload_size
 }
 
 /// Streaming CommP hasher with optimized memory management
@@ -207,62 +191,61 @@ impl CommPHasher {
     }
 
     /// Build final tree and return (height, root)
-    /// 
-    /// Uses in-place buffer swapping to avoid allocations during tree building.
-    fn build(&mut self) -> (u8, [u8; NODE_SIZE]) {
-        // Process any remaining buffered data
+    ///
+    /// Does not modify the hasher, so it can be called repeatedly and
+    /// interleaved with `write()`.
+    fn build(&self) -> (u8, [u8; NODE_SIZE]) {
+        // Leaves for the buffered partial quad (or an all-zero quad for empty input)
+        let mut tail = [[0u8; NODE_SIZE]; 2];
+        let mut tail_len = 0;
         if self.offset > 0 || self.bytes_written == 0 {
-            // Zero-fill the rest of the buffer
-            self.buffer[self.offset..].fill(0);
-            let (leaf1, leaf2) = process_quad_into(&self.buffer, &mut self.pad_buffer);
-            self.leaves.push(leaf1);
-            self.leaves.push(leaf2);
+            let mut buffer = self.buffer;
+            buffer[self.offset..].fill(0);
+            let mut padded = [0u8; OUT_BYTES_PER_QUAD];
+            let (leaf1, leaf2) = process_quad_into(&buffer, &mut padded);
+            tail = [leaf1, leaf2];
+            tail_len = 2;
         }
 
-        let num_leaves = self.leaves.len();
-        if num_leaves == 0 {
-            return (0, [0u8; NODE_SIZE]);
-        }
+        // Leaves always come in pairs and there is at least one quad, so the
+        // leaf level is even and non-empty.
+        let stored = self.leaves.len();
+        let num_leaves = stored + tail_len;
+        let leaf = |i: usize| if i < stored { &self.leaves[i] } else { &tail[i - stored] };
 
-        // Build tree level by level using double-buffering
-        let mut current = std::mem::take(&mut self.leaves);
-        let mut next: Vec<[u8; NODE_SIZE]> = Vec::with_capacity(num_leaves / 2 + 1);
         let mut concat_buf = [0u8; 64];
-        let mut height: u8 = 0;
-        
+
+        // Our leaves hash 64-byte halves of a quad, so they are level 1 of the
+        // reference tree (level 0 is the raw 32-byte FR32 chunks).
+        let mut current: Vec<[u8; NODE_SIZE]> = Vec::with_capacity(num_leaves / 2 + 1);
+        let mut i = 0;
+        while i < num_leaves {
+            current.push(compute_node_into(leaf(i), leaf(i + 1), &mut concat_buf));
+            i += 2;
+        }
+        let mut height: u8 = 2;
+        let mut next: Vec<[u8; NODE_SIZE]> = Vec::with_capacity(current.len() / 2 + 1);
+
         while current.len() > 1 {
             // Pad with zero commitment if odd number
             if current.len() % 2 == 1 {
-                current.push(get_zero_comm(height as usize + 1));
+                current.push(get_zero_comm(height as usize));
             }
-            
+
             // Combine pairs into parent nodes
             next.clear();
-            next.reserve(current.len() / 2);
-            
             let mut i = 0;
             while i < current.len() {
-                let parent = compute_node_into(&current[i], &current[i + 1], &mut concat_buf);
-                next.push(parent);
+                next.push(compute_node_into(&current[i], &current[i + 1], &mut concat_buf));
                 i += 2;
             }
-            
+
             // Swap buffers
             std::mem::swap(&mut current, &mut next);
             height += 1;
         }
 
-        let root = if current.is_empty() {
-            [0u8; NODE_SIZE]
-        } else {
-            current[0]
-        };
-
-        // Restore leaves vector for potential reuse
-        self.leaves = current;
-        self.leaves.clear();
-
-        (height, root)
+        (height, current[0])
     }
 
     /// Get the full multihash-encoded digest
@@ -274,49 +257,22 @@ impl CommPHasher {
     /// - `padding`: bytes of zero-padding added to reach next power-of-two piece size  
     /// - `height`: tree height (log2 of leaf count)
     /// - `root`: 32-byte Merkle root
-    pub fn digest(&mut self) -> Vec<u8> {
+    pub fn digest(&self) -> Vec<u8> {
         let (height, root) = self.build();
-        
-        let padding = if self.bytes_written == 0 {
-            MIN_PAYLOAD_SIZE
-        } else {
-            to_zero_padded_size(self.bytes_written as usize) - self.bytes_written as usize
-        };
-
-        // Build result: multihash format
-        let mut result = Vec::with_capacity(48);
-        
-        // Write code (0x1011)
-        varint_encode(0x1011, &mut result);
-        
-        // Calculate digest size
-        let padding_len = varint_len(padding);
-        let digest_size = padding_len + 1 + NODE_SIZE;
-        varint_encode(digest_size, &mut result);
-        
-        // Write padding
-        varint_encode(padding, &mut result);
-        
-        // Write height
-        result.push(height);
-        
-        // Write root
-        result.extend_from_slice(&root);
-        
-        result
+        encode_digest(zero_padding(self.bytes_written), height, &root)
     }
 
     /// Get just the 32-byte CommP root hash
     /// 
     /// Returns the raw Merkle root without multihash encoding.
     /// Use `digest()` if you need the full multihash with metadata.
-    pub fn root(&mut self) -> Vec<u8> {
+    pub fn root(&self) -> Vec<u8> {
         let (_, root) = self.build();
         root.to_vec()
     }
 
     /// Get the tree height
-    pub fn height(&mut self) -> u8 {
+    pub fn height(&self) -> u8 {
         let (height, _) = self.build();
         height
     }
@@ -341,9 +297,27 @@ impl Default for CommPHasher {
     }
 }
 
+/// Encode the multihash: [code, digest size, padding, height, root]
+fn encode_digest(padding: u64, height: u8, root: &[u8; NODE_SIZE]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(48);
+
+    // Write code (0x1011)
+    varint_encode(0x1011, &mut result);
+
+    // Digest size: padding varint + height byte + root
+    let digest_size = varint_len(padding) + 1 + NODE_SIZE as u64;
+    varint_encode(digest_size, &mut result);
+
+    varint_encode(padding, &mut result);
+    result.push(height);
+    result.extend_from_slice(root);
+
+    result
+}
+
 /// Encode a number as varint
 #[inline]
-fn varint_encode(mut num: usize, out: &mut Vec<u8>) {
+fn varint_encode(mut num: u64, out: &mut Vec<u8>) {
     while num >= 0x80 {
         out.push((num as u8 & 0x7f) | 0x80);
         num >>= 7;
@@ -353,7 +327,7 @@ fn varint_encode(mut num: usize, out: &mut Vec<u8>) {
 
 /// Get varint encoding length
 #[inline]
-fn varint_len(mut num: usize) -> usize {
+fn varint_len(mut num: u64) -> u64 {
     let mut len = 1;
     while num >= 0x80 {
         len += 1;
@@ -418,12 +392,64 @@ mod tests {
     }
     
     #[test]
-    fn test_zero_padded_size() {
-        // Test that integer math matches JS implementation
-        assert_eq!(to_zero_padded_size(65), 127);
-        assert_eq!(to_zero_padded_size(127), 127);
-        assert_eq!(to_zero_padded_size(128), 254);
-        assert_eq!(to_zero_padded_size(1024), 2032);
-        assert_eq!(to_zero_padded_size(1024 * 1024), 2080768);
+    fn test_zero_padding() {
+        assert_eq!(zero_padding(0), 127);
+        assert_eq!(zero_padding(1), 126);
+        assert_eq!(zero_padding(65), 62);
+        assert_eq!(zero_padding(127), 0);
+        assert_eq!(zero_padding(128), 126);
+        assert_eq!(zero_padding(1024), 1008);
+        assert_eq!(zero_padding(1024 * 1024), 1032192);
+        // Overflowed usize on wasm32 before (#5)
+        assert_eq!(zero_padding(33_292_288), 0);
+        assert_eq!(zero_padding(33_292_289), 33_292_287);
+        assert_eq!(zero_padding(40_000_000), 26_584_576);
+        // Beyond 2^32
+        assert_eq!(zero_padding(127 << 32), 0);
+        assert_eq!(zero_padding((127 << 32) + 1), (127 << 32) - 1);
+        assert_eq!(zero_padding(1 << 35), (127 << 29) - (1 << 35));
+    }
+
+    #[test]
+    fn test_varint_u64() {
+        let mut out = Vec::new();
+        varint_encode((1 << 33) + 5, &mut out);
+        assert_eq!(out, [0x85, 0x80, 0x80, 0x80, 0x20]);
+        assert_eq!(varint_len((1 << 33) + 5), 5);
+    }
+
+    #[test]
+    fn test_height() {
+        // One quad is 4 FR32 chunks: height 2 (#2)
+        let mut hasher = CommPHasher::new();
+        assert_eq!(hasher.height(), 2);
+        hasher.write(&[0x42u8; 127]);
+        assert_eq!(hasher.height(), 2);
+        hasher.write(&[0x42u8; 1]);
+        assert_eq!(hasher.height(), 3);
+    }
+
+    #[test]
+    fn test_empty_digest() {
+        // padding 127, height 2 (#4)
+        let digest = CommPHasher::new().digest();
+        assert_eq!(&digest[..5], &[0x91, 0x20, 0x22, 0x7f, 0x02]);
+    }
+
+    #[test]
+    fn test_build_is_repeatable() {
+        let mut hasher = CommPHasher::new();
+        hasher.write(&[0x42u8; 1000]);
+        let first = hasher.digest();
+        assert_eq!(hasher.digest(), first);
+        assert_eq!(hasher.root(), first[first.len() - 32..]);
+        assert_eq!(hasher.height(), first[first.len() - 33]);
+
+        // Writing after digest matches a single write
+        hasher.write(&[0x43u8; 1000]);
+        let mut expected = CommPHasher::new();
+        expected.write(&[0x42u8; 1000]);
+        expected.write(&[0x43u8; 1000]);
+        assert_eq!(hasher.digest(), expected.digest());
     }
 }

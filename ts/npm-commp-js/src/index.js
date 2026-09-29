@@ -16,47 +16,17 @@ import {
   CODE_SIZE,
   HEIGHT_SIZE,
   IN_BYTES_PER_QUAD,
-  MIN_PAYLOAD_SIZE,
   MULTIHASH_CODE,
   ROOT_SIZE,
 } from './constants.js'
-import { readQuadToNodes, toZeroPaddedSize } from './fr32.js'
+import { readQuadToNodes, toPadding } from './fr32.js'
 import { build, createLayer, getHeight, getRoot, prune } from './tree.js'
+import {
+  encodeTo as varintEncodeTo,
+  encodingLength as varintEncodingLength,
+} from './varint.js'
 
 /** @import { StreamingHasher, PieceDigest, TreeLayer } from './types.js' */
-
-/**
- * Encodes a number as a varint into the buffer at the given offset
- *
- * @param {number} num - Number to encode
- * @param {Uint8Array} buf - Buffer to write to
- * @param {number} offset - Offset to start writing
- * @returns {number} - Number of bytes written
- */
-function varintEncodeTo(num, buf, offset) {
-  let i = offset
-  while (num >= 0x80) {
-    buf[i++] = (num & 0x7f) | 0x80
-    num >>>= 7
-  }
-  buf[i++] = num
-  return i - offset
-}
-
-/**
- * Returns the number of bytes needed to encode a number as varint
- *
- * @param {number} num - Number to measure
- * @returns {number} - Bytes needed
- */
-function varintEncodingLength(num) {
-  let len = 0
-  while (num >= 0x80) {
-    len++
-    num >>>= 7
-  }
-  return len + 1
-}
 
 export { MULTIHASH_CODE as code }
 export const name = /** @type {const} */ (
@@ -67,19 +37,6 @@ export const name = /** @type {const} */ (
  * Maximum digest size in bytes
  */
 export const MAX_DIGEST_SIZE = CODE_SIZE + 10 + 10 + HEIGHT_SIZE + ROOT_SIZE
-
-/**
- * Computes the required zero padding for a given payload size
- *
- * @param {bigint} bytesWritten - Number of bytes written
- * @returns {number} - Zero padding required
- */
-function requiredZeroPadding(bytesWritten) {
-  const size = Number(bytesWritten)
-  if (size === 0) return MIN_PAYLOAD_SIZE
-  const paddedSize = toZeroPaddedSize(size)
-  return paddedSize - size
-}
 
 /**
  * Streaming CommP hasher
@@ -220,7 +177,7 @@ class Hasher {
 
     const height = getHeight(buildLayers)
     const root = getRoot(buildLayers)
-    const padding = requiredZeroPadding(bytesWritten)
+    const padding = toPadding(bytesWritten)
 
     // Calculate multihash size
     const paddingLength = varintEncodingLength(padding)
