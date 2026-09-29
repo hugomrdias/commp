@@ -9,8 +9,7 @@
  */
 
 import {
-  FR_RATIO,
-  MIN_PAYLOAD_SIZE,
+  IN_BYTES_PER_QUAD,
   NODE_SIZE,
   OUT_BYTES_PER_QUAD,
 } from './constants.js'
@@ -113,24 +112,17 @@ export function readQuadToNodes(source, sourceOffset, nodes, nodeIndex) {
 }
 
 /**
- * Calculate the zero-padded size for a given payload size
+ * Calculate the zero padding needed to round a payload up to a power-of-two
+ * number of quads (minimum one quad)
  *
- * @param {number} payloadSize - Original payload size in bytes
- * @returns {number} - Zero-padded size (multiple of 127)
- */
-export function toZeroPaddedSize(payloadSize) {
-  const size = Math.max(payloadSize, MIN_PAYLOAD_SIZE)
-  const highestBit = Math.floor(Math.log2(size))
-  const bound = Math.ceil(FR_RATIO * 2 ** (highestBit + 1))
-  return size <= bound ? bound : Math.ceil(FR_RATIO * 2 ** (highestBit + 2))
-}
-
-/**
- * Calculate piece size from payload size
+ * Matches `Unpadded.toPadding` in @web3-storage/data-segment.
  *
- * @param {number} size - Payload size
- * @returns {number} - Piece size after FR32 expansion
+ * @param {bigint} payloadSize - Original payload size in bytes
+ * @returns {number} - Zero padding in bytes
  */
-export function toPieceSize(size) {
-  return toZeroPaddedSize(size) / FR_RATIO
+export function toPadding(payloadSize) {
+  const size = BigInt(IN_BYTES_PER_QUAD)
+  let quads = 1n
+  while (quads * size < payloadSize) quads *= 2n
+  return Number(quads * size - payloadSize)
 }

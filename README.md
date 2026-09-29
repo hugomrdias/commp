@@ -166,7 +166,7 @@ Returns a `PieceDigest` object with:
 | `bytes` | `Uint8Array` | Full multihash-encoded digest |
 | `digest` | `Uint8Array` | Digest payload (padding + height + root) |
 | `root` | `Uint8Array` | 32-byte Merkle root |
-| `height` | `number` | Tree height (log₂ of leaf count) |
+| `height` | `number` | Tree height (log₂ of piece size ÷ 32) |
 | `padding` | `number` | Zero-padding bytes added |
 
 ### `create(): Hasher`

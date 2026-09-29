@@ -188,9 +188,13 @@ export function getRoot(layers) {
 /**
  * Gets the tree height from layers
  *
+ * Our leaves hash 64-byte halves of a quad, so they are level 1 of the
+ * reference tree (level 0 is the raw 32-byte FR32 chunks). The height is
+ * therefore one more than the index of the top layer.
+ *
  * @param {TreeLayer[]} layers - Tree layers
  * @returns {number} - Height of the tree
  */
 export function getHeight(layers) {
-  return layers.length - 1
+  return layers.length
 }
