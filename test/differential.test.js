@@ -14,6 +14,7 @@ import * as JS from '../ts/npm-commp-js/src/index.js'
 import * as JSVarint from '../ts/npm-commp-js/src/varint.js'
 import * as Wasm from '../ts/npm-commp-wasm/src/index.js'
 import { CommPHasher } from '../ts/npm-commp-wasm/src/inline/commp_wasm.js'
+import { wasm } from '../ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js'
 import * as WasmVarint from '../ts/npm-commp-wasm/src/varint.js'
 
 /**
@@ -230,6 +231,21 @@ describe('full digest matches data-segment', function () {
       chunks.push(chunk.subarray(0, Math.min(left, chunk.length)))
     }
     assertAllMatch(chunks)
+  })
+})
+
+describe('wasm memory', () => {
+  it('stays constant while streaming 256 MiB', function () {
+    this.timeout(60_000)
+    const chunk = randomBytes(1 << 20, 5)
+    const hasher = new CommPHasher()
+    // The first write may grow memory to fit the chunk copy
+    hasher.write(chunk)
+    const before = wasm.memory.buffer.byteLength
+    for (let i = 1; i < 256; i++) hasher.write(chunk)
+    hasher.digest()
+    assert.strictEqual(wasm.memory.buffer.byteLength, before)
+    hasher.free()
   })
 })
 
