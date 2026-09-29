@@ -57,7 +57,7 @@ const CommPHasherFinalization = (typeof FinalizationRegistry === 'undefined')
     : new FinalizationRegistry(ptr => wasm.__wbg_commphasher_free(ptr >>> 0, 1));
 
 /**
- * Streaming CommP hasher with optimized memory management
+ * Streaming CommP hasher with O(log n) memory
  */
 export class CommPHasher {
     __destroy_into_raw() {
@@ -130,7 +130,7 @@ export class CommPHasher {
      * - `code`: 0x1011 = "fr32-sha256-trunc254-padded-binary-tree" multihash identifier
      * - `size`: total digest size (padding_len + 1 + 32)
      * - `padding`: bytes of zero-padding added to reach next power-of-two piece size
-     * - `height`: tree height (log2 of leaf count)
+     * - `height`: tree height (log2 of piece size / 32)
      * - `root`: 32-byte Merkle root
      * @returns {Uint8Array}
      */
