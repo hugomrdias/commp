@@ -1,0 +1,4 @@
+# Pinned so the committed inline WASM can be reproduced exactly (see CI)
+[toolchain]
+channel = "1.92.0"
+targets = ["wasm32-unknown-unknown"]

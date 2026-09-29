@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep in sync with the local toolchain used to build the committed inline WASM
+  WASM_PACK_VERSION: 0.13.1
+  BINARYEN_VERSION: '114'
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rs/commp
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rs/commp
+      - run: cargo test --lib
+      - run: cargo build --lib --release --target wasm32-unknown-unknown
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+      # Rebuild the inline WASM and fail if it differs from the committed copy
+      - run: rustup show
+        working-directory: rs/commp
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rs/commp
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+      - name: Install binaryen
+        run: |
+          curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+      - run: pnpm --filter @commp/wasm build
+      - name: Check inline WASM is up to date
+        run: |
+          if ! git diff --exit-code --stat -- ts/npm-commp-wasm/src/inline; then
+            echo "::error::Inline WASM is stale. Run 'pnpm --filter @commp/wasm build' and commit the result."
+            exit 1
+          fi
+
+      - run: pnpm test
