@@ -36,4 +36,5 @@ opt-level = 3
 
 [package.metadata.wasm-pack.profile.release]
 # Maximum wasm-opt optimization with bulk memory and SIMD
-wasm-opt = ["-O4", "--enable-bulk-memory", "--enable-simd"]
+# --strip-producers drops toolchain metadata so builds are reproducible across machines
+wasm-opt = ["-O4", "--enable-bulk-memory", "--enable-simd", "--strip-producers"]
