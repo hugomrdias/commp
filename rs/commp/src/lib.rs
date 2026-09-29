@@ -112,7 +112,70 @@ fn zero_padding(payload_size: u64) -> u64 {
     quads * IN_BYTES_PER_QUAD as u64 - payload_size
 }
 
-/// Streaming CommP hasher with optimized memory management
+/// Pending subtree roots, one per tree level, updated like a binary counter
+///
+/// Bit `k` of `count` is set when `nodes[k]` holds the root of a complete
+/// subtree of `2^k` leaves that is still waiting for its right sibling. Memory
+/// is O(log n) regardless of input size.
+#[derive(Clone, Copy)]
+struct Stack {
+    /// `nodes[k]` is a pending node at tree level `k + 1`
+    nodes: [[u8; NODE_SIZE]; MAX_LEVEL],
+    /// Number of leaves pushed so far
+    count: u64,
+}
+
+impl Stack {
+    fn new() -> Self {
+        Stack {
+            nodes: [[0u8; NODE_SIZE]; MAX_LEVEL],
+            count: 0,
+        }
+    }
+
+    /// Push a leaf, merging completed subtrees upward
+    #[inline]
+    fn push(&mut self, leaf: [u8; NODE_SIZE], concat: &mut [u8; 64]) {
+        let mut node = leaf;
+        let mut level = 0;
+        while self.count >> level & 1 == 1 {
+            node = compute_node_into(&self.nodes[level], &node, concat);
+            level += 1;
+        }
+        self.nodes[level] = node;
+        self.count += 1;
+    }
+
+    /// Fold pending nodes into the root, padding with zero commitments
+    ///
+    /// Our leaves hash 64-byte halves of a quad, so they are level 1 of the
+    /// reference tree (level 0 is the raw 32-byte FR32 chunks). Requires at
+    /// least two leaves. Returns (height, root).
+    fn fold(&self) -> (u8, [u8; NODE_SIZE]) {
+        let n = self.count;
+        let top = (u64::BITS - 1 - n.leading_zeros()) as usize;
+        if n.is_power_of_two() {
+            return ((top + 1) as u8, self.nodes[top]);
+        }
+
+        // Carry the right-most partial subtree up to the level of `top`,
+        // pairing it with a pending left sibling or a zero commitment
+        let mut concat = [0u8; 64];
+        let lowest = n.trailing_zeros() as usize;
+        let mut acc = compute_node_into(&self.nodes[lowest], &get_zero_comm(lowest + 1), &mut concat);
+        for level in lowest + 1..top {
+            acc = if n >> level & 1 == 1 {
+                compute_node_into(&self.nodes[level], &acc, &mut concat)
+            } else {
+                compute_node_into(&acc, &get_zero_comm(level + 1), &mut concat)
+            };
+        }
+
+        ((top + 2) as u8, compute_node_into(&self.nodes[top], &acc, &mut concat))
+    }
+}
+
+/// Streaming CommP hasher with O(log n) memory
 #[wasm_bindgen]
 pub struct CommPHasher {
     /// Buffer for accumulating partial quads
@@ -121,10 +184,12 @@ pub struct CommPHasher {
     offset: usize,
     /// Total bytes written
     bytes_written: u64,
-    /// Collected leaf nodes
-    leaves: Vec<[u8; NODE_SIZE]>,
+    /// Pending tree nodes
+    stack: Stack,
     /// Reusable FR32 padding buffer (avoids allocation in hot loop)
     pad_buffer: [u8; OUT_BYTES_PER_QUAD],
+    /// Reusable buffer for hashing node pairs
+    concat_buffer: [u8; 64],
 }
 
 #[wasm_bindgen]
@@ -136,9 +201,18 @@ impl CommPHasher {
             buffer: [0u8; IN_BYTES_PER_QUAD],
             offset: 0,
             bytes_written: 0,
-            leaves: Vec::with_capacity(16384), // Pre-allocate for ~1MB of input
+            stack: Stack::new(),
             pad_buffer: [0u8; OUT_BYTES_PER_QUAD],
+            concat_buffer: [0u8; 64],
         }
+    }
+
+    /// Hash a full quad into two leaves and push them onto the stack
+    #[inline]
+    fn push_quad(&mut self, quad: &[u8]) {
+        let (leaf1, leaf2) = process_quad_into(quad, &mut self.pad_buffer);
+        self.stack.push(leaf1, &mut self.concat_buffer);
+        self.stack.push(leaf2, &mut self.concat_buffer);
     }
 
     /// Write bytes into the hasher
@@ -165,20 +239,14 @@ impl CommPHasher {
             self.buffer[self.offset..].copy_from_slice(&bytes[..bytes_needed]);
             read_pos = bytes_needed;
 
-            let (leaf1, leaf2) = process_quad_into(&self.buffer, &mut self.pad_buffer);
-            self.leaves.push(leaf1);
-            self.leaves.push(leaf2);
+            let buffer = self.buffer;
+            self.push_quad(&buffer);
             self.offset = 0;
         }
 
         // Process full quads directly from input
         while read_pos + IN_BYTES_PER_QUAD <= len {
-            let (leaf1, leaf2) = process_quad_into(
-                &bytes[read_pos..read_pos + IN_BYTES_PER_QUAD],
-                &mut self.pad_buffer
-            );
-            self.leaves.push(leaf1);
-            self.leaves.push(leaf2);
+            self.push_quad(&bytes[read_pos..read_pos + IN_BYTES_PER_QUAD]);
             read_pos += IN_BYTES_PER_QUAD;
         }
 
@@ -192,60 +260,23 @@ impl CommPHasher {
 
     /// Build final tree and return (height, root)
     ///
-    /// Does not modify the hasher, so it can be called repeatedly and
-    /// interleaved with `write()`.
+    /// Works on a copy of the stack, so it does not modify the hasher and can
+    /// be called repeatedly and interleaved with `write()`.
     fn build(&self) -> (u8, [u8; NODE_SIZE]) {
-        // Leaves for the buffered partial quad (or an all-zero quad for empty input)
-        let mut tail = [[0u8; NODE_SIZE]; 2];
-        let mut tail_len = 0;
+        let mut stack = self.stack;
+
+        // Hash the buffered partial quad (or an all-zero quad for empty input)
         if self.offset > 0 || self.bytes_written == 0 {
             let mut buffer = self.buffer;
             buffer[self.offset..].fill(0);
             let mut padded = [0u8; OUT_BYTES_PER_QUAD];
+            let mut concat = [0u8; 64];
             let (leaf1, leaf2) = process_quad_into(&buffer, &mut padded);
-            tail = [leaf1, leaf2];
-            tail_len = 2;
+            stack.push(leaf1, &mut concat);
+            stack.push(leaf2, &mut concat);
         }
 
-        // Leaves always come in pairs and there is at least one quad, so the
-        // leaf level is even and non-empty.
-        let stored = self.leaves.len();
-        let num_leaves = stored + tail_len;
-        let leaf = |i: usize| if i < stored { &self.leaves[i] } else { &tail[i - stored] };
-
-        let mut concat_buf = [0u8; 64];
-
-        // Our leaves hash 64-byte halves of a quad, so they are level 1 of the
-        // reference tree (level 0 is the raw 32-byte FR32 chunks).
-        let mut current: Vec<[u8; NODE_SIZE]> = Vec::with_capacity(num_leaves / 2 + 1);
-        let mut i = 0;
-        while i < num_leaves {
-            current.push(compute_node_into(leaf(i), leaf(i + 1), &mut concat_buf));
-            i += 2;
-        }
-        let mut height: u8 = 2;
-        let mut next: Vec<[u8; NODE_SIZE]> = Vec::with_capacity(current.len() / 2 + 1);
-
-        while current.len() > 1 {
-            // Pad with zero commitment if odd number
-            if current.len() % 2 == 1 {
-                current.push(get_zero_comm(height as usize));
-            }
-
-            // Combine pairs into parent nodes
-            next.clear();
-            let mut i = 0;
-            while i < current.len() {
-                next.push(compute_node_into(&current[i], &current[i + 1], &mut concat_buf));
-                i += 2;
-            }
-
-            // Swap buffers
-            std::mem::swap(&mut current, &mut next);
-            height += 1;
-        }
-
-        (height, current[0])
+        stack.fold()
     }
 
     /// Get the full multihash-encoded digest
@@ -255,7 +286,7 @@ impl CommPHasher {
     /// - `code`: 0x1011 = "fr32-sha256-trunc254-padded-binary-tree" multihash identifier
     /// - `size`: total digest size (padding_len + 1 + 32)
     /// - `padding`: bytes of zero-padding added to reach next power-of-two piece size  
-    /// - `height`: tree height (log2 of leaf count)
+    /// - `height`: tree height (log2 of piece size / 32)
     /// - `root`: 32-byte Merkle root
     pub fn digest(&self) -> Vec<u8> {
         let (height, root) = self.build();
@@ -287,7 +318,7 @@ impl CommPHasher {
         self.buffer.fill(0);
         self.offset = 0;
         self.bytes_written = 0;
-        self.leaves.clear();
+        self.stack.count = 0;
     }
 }
 
@@ -434,6 +465,48 @@ mod tests {
         // padding 127, height 2 (#4)
         let digest = CommPHasher::new().digest();
         assert_eq!(&digest[..5], &[0x91, 0x20, 0x22, 0x7f, 0x02]);
+    }
+
+    /// Naive level-by-level tree over level-1 leaves, padding odd levels
+    fn naive_tree(leaves: &[[u8; NODE_SIZE]]) -> (u8, [u8; NODE_SIZE]) {
+        let mut concat = [0u8; 64];
+        let mut current = leaves.to_vec();
+        let mut height = 1u8;
+        while current.len() > 1 {
+            if current.len() % 2 == 1 {
+                current.push(get_zero_comm(height as usize));
+            }
+            current = current
+                .chunks(2)
+                .map(|pair| compute_node_into(&pair[0], &pair[1], &mut concat))
+                .collect();
+            height += 1;
+        }
+        (height, current[0])
+    }
+
+    #[test]
+    fn test_stack_matches_naive_tree() {
+        let mut concat = [0u8; 64];
+        let leaves: Vec<[u8; NODE_SIZE]> = (0..600u32)
+            .map(|i| {
+                let mut block = [0u8; 64];
+                block[..4].copy_from_slice(&i.to_le_bytes());
+                truncated_hash_64(&block)
+            })
+            .collect();
+
+        let mut stack = Stack::new();
+        for n in 1..=leaves.len() {
+            stack.push(leaves[n - 1], &mut concat);
+            let (height, root) = stack.fold();
+            if n == 1 {
+                // A single leaf is its own root; never happens in practice
+                assert_eq!((height, root), (1, leaves[0]));
+                continue;
+            }
+            assert_eq!((height, root), naive_tree(&leaves[..n]), "{n} leaves");
+        }
     }
 
     #[test]
