@@ -15,7 +15,7 @@
     "src"
   ],
   "scripts": {
-    "build:wasm": "cd ../../rs/commp && wasm-pack build --target bundler --out-dir ../../ts/npm-commp-wasm/pkg-bundler --release",
+    "build:wasm": "cd ../../rs/commp && RUSTFLAGS=\"-C target-feature=+simd128 --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo\" wasm-pack build --target bundler --out-dir ../../ts/npm-commp-wasm/pkg-bundler --release",
     "build:inline": "node ../../scripts/build-inline-wasm.js",
     "build": "pnpm build:wasm && pnpm build:inline",
     "clean": "rm -rf pkg-bundler"
