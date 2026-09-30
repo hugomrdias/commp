@@ -233,7 +233,7 @@ enum Backend {
     Avx2,
     Sse2,
     Neon,
-    /// sha2, one message at a time
+    /// sha2, one message at a time (with its own SHA2 / SHA-NI if present)
     Portable,
 }
 
@@ -318,7 +318,7 @@ impl Backend {
             Backend::Avx2 => "AVX2, 8 messages per SHA-256",
             Backend::Sse2 => "SSE2, 8 messages per SHA-256 (2 vectors)",
             Backend::Neon => "NEON, 8 messages per SHA-256 (2 vectors)",
-            Backend::Portable => "sha2 portable",
+            Backend::Portable => "sha2, one message at a time",
         }
     }
 }
