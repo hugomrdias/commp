@@ -1,200 +1,125 @@
 /**
- * Optimized merkle tree building for CommP
+ * Streaming merkle tree with O(log n) memory
  *
- * Uses pre-allocated buffers and index-based management to minimize
- * allocations during tree construction.
+ * Keeps one pending node per tree level, merged like a binary counter as
+ * leaves are pushed, in a single flat buffer.
  *
  * @module
  */
 
 import { NODE_SIZE } from './constants.js'
-import { CONCAT_BUFFER, truncatedHash } from './hash.js'
+import { CONCAT_BUFFER, truncatedHashInto } from './hash.js'
 import { fromLevel as zeroFromLevel } from './zero-comm.js'
 
+/** Maximum tree levels */
+const MAX_LEVEL = 64
+
 /**
- * Computes a parent node from two child nodes using truncated SHA256
+ * Hash `left || right` into `out` at `outOffset`. Both inputs are copied
+ * before hashing, so `out` may overlap either of them.
  *
- * @example
- * ```ts twoslash
- * import { computeNode } from './tree.js'
- *
- * const left = new Uint8Array(32).fill(1)
- * const right = new Uint8Array(32).fill(2)
- * const parent = computeNode(left, right)
- * ```
- *
- * @param {Uint8Array} left - Left child node (32 bytes)
- * @param {Uint8Array} right - Right child node (32 bytes)
- * @returns {Uint8Array} - Parent node (32 bytes, new allocation)
+ * @param {Uint8Array} left - 32-byte node
+ * @param {Uint8Array} right - 32-byte node
+ * @param {Uint8Array} out
+ * @param {number} outOffset
  */
-export function computeNode(left, right) {
+function hashPairInto(left, right, out, outOffset) {
   CONCAT_BUFFER.set(left, 0)
   CONCAT_BUFFER.set(right, NODE_SIZE)
-  return truncatedHash(CONCAT_BUFFER)
+  truncatedHashInto(CONCAT_BUFFER, out, outOffset)
 }
 
 /**
- * Computes a parent node in-place into an output buffer
+ * Pending subtree roots, one per level
  *
- * @param {Uint8Array} left - Left child node (32 bytes)
- * @param {Uint8Array} right - Right child node (32 bytes)
- * @param {Uint8Array} output - Output buffer for parent node (32 bytes)
- * @param {number} [outputOffset=0] - Offset into output buffer
+ * `filled[k]` is set when `nodes` holds, at slot `k`, the root of a complete
+ * subtree of `2^k` leaves that is still waiting for its right sibling. Slot
+ * `k` is a node at tree level `k + 1`: our leaves hash 64-byte halves of a
+ * quad, so they are level 1 of the reference tree (level 0 is the raw 32-byte
+ * FR32 chunks).
  */
-export function computeNodeInto(left, right, output, outputOffset = 0) {
-  CONCAT_BUFFER.set(left, 0)
-  CONCAT_BUFFER.set(right, NODE_SIZE)
-  const hash = truncatedHash(CONCAT_BUFFER)
-  output.set(hash, outputOffset)
-}
-
-/**
- * @typedef {Object} TreeLayer
- * @property {Uint8Array[]} nodes - Array of 32-byte node buffers
- * @property {number} count - Number of active nodes in this layer
- */
-
-/**
- * Creates a new tree layer with pre-allocated capacity
- *
- * @param {number} [capacity=1024] - Initial capacity for nodes
- * @returns {TreeLayer}
- */
-export function createLayer(capacity = 1024) {
-  return {
-    nodes: new Array(capacity),
-    count: 0,
+export class Stack {
+  constructor() {
+    /** Pending nodes, `NODE_SIZE` bytes per level */
+    this.nodes = new Uint8Array(MAX_LEVEL * NODE_SIZE)
+    /** Whether each level holds a pending node */
+    this.filled = new Uint8Array(MAX_LEVEL)
+    /** Scratch node carried upward by `push` */
+    this.carry = new Uint8Array(NODE_SIZE)
   }
-}
 
-/**
- * Prunes layers by combining node pairs into parent nodes.
- * After pruning, each layer will have at most one node.
- *
- * @param {TreeLayer[]} layers - Array of tree layers (layer 0 = leaves)
- */
-export function prune(layers) {
-  flush(layers, false)
-}
-
-/**
- * Builds the final tree by combining all nodes up to the root.
- * Odd nodes are paired with zero padding nodes at their level.
- *
- * @param {TreeLayer[]} layers - Array of tree layers
- * @returns {TreeLayer[]} - The built layers (may have new layers added)
- */
-export function build(layers) {
-  // Clone layers for build to not mutate the streaming state
-  const cloned = layers.map((layer) => ({
-    nodes: [...layer.nodes],
-    count: layer.count,
-  }))
-  flush(cloned, true)
-  return cloned
-}
-
-/**
- * Internal flush operation that combines nodes up the tree
- *
- * Follows the same algorithm as @web3-storage/data-segment:
- * - During prune (isBuild=false): combine pairs, leave odd nodes for later
- * - During build (isBuild=true): pad odd nodes with zeros, combine all
- *
- * @param {TreeLayer[]} layers - Tree layers to flush
- * @param {boolean} isBuild - If true, pad odd nodes with zeros; if false, leave for later
- */
-function flush(layers, isBuild) {
-  let level = 0
-
-  while (level < layers.length) {
-    const layer = layers[level]
-    let next = level + 1 < layers.length ? layers[level + 1] : null
-
-    // If building and we have odd number of nodes AND there's a next layer,
-    // add zero padding for this level.
-    // NOTE: We use level+1 because our "leaves" are already hashes of 64-byte pairs,
-    // which is equivalent to level 1 in the original raw-chunk tree.
-    if (isBuild && layer.count % 2 === 1 && next) {
-      layer.nodes[layer.count] = zeroFromLevel(level + 1)
-      layer.count++
-    }
-
-    level++
-
-    // Prepare the next layer
-    // If building, we need to clone to not mutate; if pruning, use as-is
-    if (next) {
-      if (isBuild) {
-        // Clone the next layer's nodes for build mode
-        const clonedNodes = []
-        for (let i = 0; i < next.count; i++) {
-          clonedNodes[i] = next.nodes[i]
-        }
-        next = { nodes: clonedNodes, count: next.count }
-        layers[level] = next
-      }
-    } else {
-      next = createLayer()
-    }
-
-    // Combine pairs of nodes
-    let index = 0
-    while (index + 1 < layer.count) {
-      const left = layer.nodes[index]
-      const right = layer.nodes[index + 1]
-      const parent = computeNode(left, right)
-
-      next.nodes[next.count] = parent
-      next.count++
-
-      // Clear processed nodes for GC
-      layer.nodes[index] = /** @type {any} */ (undefined)
-      layer.nodes[index + 1] = /** @type {any} */ (undefined)
-
-      index += 2
-    }
-
-    // Only add next layer if it has nodes
-    if (next.count > 0) {
-      layers[level] = next
-    }
-
-    // Remove processed nodes from current layer, keeping any unpaired node
-    if (index < layer.count) {
-      // Move unpaired node to front
-      layer.nodes[0] = layer.nodes[index]
-      for (let i = 1; i <= index; i++) {
-        layer.nodes[i] = /** @type {any} */ (undefined)
-      }
-      layer.count = 1
-    } else {
-      layer.count = 0
-    }
+  /**
+   * Copy the stack, so a digest can finish the tree without changing it
+   *
+   * @returns {Stack}
+   */
+  clone() {
+    const copy = new Stack()
+    copy.nodes.set(this.nodes)
+    copy.filled.set(this.filled)
+    return copy
   }
-}
 
-/**
- * Gets the root node from built layers
- *
- * @param {TreeLayer[]} layers - Built tree layers
- * @returns {Uint8Array} - The 32-byte root node
- */
-export function getRoot(layers) {
-  const topLayer = layers[layers.length - 1]
-  return topLayer.nodes[0]
-}
+  /**
+   * Remove all pending nodes
+   */
+  clear() {
+    this.filled.fill(0)
+  }
 
-/**
- * Gets the tree height from layers
- *
- * Our leaves hash 64-byte halves of a quad, so they are level 1 of the
- * reference tree (level 0 is the raw 32-byte FR32 chunks). The height is
- * therefore one more than the index of the top layer.
- *
- * @param {TreeLayer[]} layers - Tree layers
- * @returns {number} - Height of the tree
- */
-export function getHeight(layers) {
-  return layers.length
+  /**
+   * Push a leaf, merging completed subtrees upward
+   *
+   * @param {Uint8Array} leaf - 32-byte leaf (copied)
+   */
+  push(leaf) {
+    const { nodes, filled, carry } = this
+    carry.set(leaf)
+    let level = 0
+    while (filled[level]) {
+      hashPairInto(
+        nodes.subarray(level * NODE_SIZE, (level + 1) * NODE_SIZE),
+        carry,
+        carry,
+        0,
+      )
+      filled[level] = 0
+      level++
+    }
+    nodes.set(carry, level * NODE_SIZE)
+    filled[level] = 1
+  }
+
+  /**
+   * Fold pending nodes into the root, padding with zero commitments
+   *
+   * Requires at least two leaves. Does not modify the stack.
+   *
+   * @returns {{ height: number, root: Uint8Array }}
+   */
+  fold() {
+    const { nodes, filled } = this
+    const lowest = filled.indexOf(1)
+    const top = filled.lastIndexOf(1)
+    const node = (/** @type {number} */ level) =>
+      nodes.subarray(level * NODE_SIZE, (level + 1) * NODE_SIZE)
+
+    if (lowest === top) {
+      return { height: top + 1, root: node(top).slice() }
+    }
+
+    // Carry the right-most partial subtree up to the level of `top`,
+    // pairing it with a pending left sibling or a zero commitment
+    const acc = new Uint8Array(NODE_SIZE)
+    hashPairInto(node(lowest), zeroFromLevel(lowest + 1), acc, 0)
+    for (let level = lowest + 1; level < top; level++) {
+      if (filled[level]) {
+        hashPairInto(node(level), acc, acc, 0)
+      } else {
+        hashPairInto(acc, zeroFromLevel(level + 1), acc, 0)
+      }
+    }
+    hashPairInto(node(top), acc, acc, 0)
+    return { height: top + 2, root: acc }
+  }
 }

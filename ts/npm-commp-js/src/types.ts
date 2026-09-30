@@ -5,14 +5,6 @@
 /** A 32-byte merkle tree node */
 export type MerkleTreeNode = Uint8Array
 
-/** A layer in the merkle tree containing nodes */
-export interface TreeLayer {
-  /** Array of 32-byte node buffers */
-  nodes: Uint8Array[]
-  /** Number of active nodes in this layer */
-  count: number
-}
-
 /** Streaming hasher interface */
 export interface StreamingHasher {
   /** Write bytes into the hasher */
