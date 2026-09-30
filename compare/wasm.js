@@ -1,5 +1,5 @@
 /**
- * CLI around @commp/wasm for compare/run.js
+ * CLI around @hugomrdias/commp-wasm for compare/run.js
  *
  * Same commands and output formats as compare/go/main.go (see there), minus
  * `gen`, whose Lotus payloads come from the Go CLI.
@@ -25,7 +25,7 @@ function info() {
     os: process.platform,
     arch: process.arch,
     deps: {
-      '@commp/wasm': JSON.parse(
+      '@hugomrdias/commp-wasm': JSON.parse(
         readFileSync(new URL('package.json', pkg), 'utf8')
       ).version,
       // The package version rarely changes; this pins the exact binary

@@ -2,8 +2,8 @@
  * Benchmark comparing all CommP implementations including inline WASM
  */
 
-import * as HasherFast from '@commp/js'
-import { create as createWasm, root as wasmRoot } from '@commp/wasm'
+import * as HasherFast from '@hugomrdias/commp-js'
+import { create as createWasm, root as wasmRoot } from '@hugomrdias/commp-wasm'
 import * as Hasher from '@web3-storage/data-segment/multihash'
 import { Bench, formatNumber } from 'tinybench'
 

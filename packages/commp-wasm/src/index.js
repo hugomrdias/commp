@@ -4,7 +4,7 @@
  * This module provides a high-performance CommP calculation using
  * Rust/WASM with inline base64 encoding - no async init required.
  *
- * @module @commp/wasm
+ * @module @hugomrdias/commp-wasm
  */
 
 import {
@@ -34,7 +34,7 @@ export const name = /** @type {const} */ (
  *
  * @example
  * ```ts twoslash
- * import { create } from '@commp/wasm'
+ * import { create } from '@hugomrdias/commp-wasm'
  *
  * const hasher = create()
  * hasher.write(new Uint8Array(1024).fill(0x42))
@@ -142,7 +142,7 @@ class Hasher {
  *
  * @example
  * ```ts twoslash
- * import { create, digest } from '@commp/wasm'
+ * import { create, digest } from '@hugomrdias/commp-wasm'
  *
  * // Streaming API
  * const hasher = create()
@@ -165,7 +165,7 @@ export function create() {
  *
  * @example
  * ```ts twoslash
- * import { digest } from '@commp/wasm'
+ * import { digest } from '@hugomrdias/commp-wasm'
  *
  * const data = new Uint8Array(1024 * 1024).fill(0x42)
  * const result = digest(data)
@@ -189,7 +189,7 @@ export function digest(payload) {
  *
  * @example
  * ```ts twoslash
- * import { root } from '@commp/wasm'
+ * import { root } from '@hugomrdias/commp-wasm'
  *
  * const data = new Uint8Array(1024 * 1024).fill(0x42)
  * const rootHash = root(data)

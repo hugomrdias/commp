@@ -1,19 +1,19 @@
-# @commp/js
+# @hugomrdias/commp-js
 
 Fast CommP (Filecoin Piece Commitment) in pure JavaScript, using [`@webbuf/sha256`](https://www.npmjs.com/package/@webbuf/sha256) and streaming with O(log n) memory.
 
-For the fastest implementation use [`@commp/wasm`](../commp-wasm).
+For the fastest implementation use [`@hugomrdias/commp-wasm`](../commp-wasm).
 
 ## Install
 
 ```bash
-npm install @commp/js
+npm install @hugomrdias/commp-js
 ```
 
 ## Usage
 
 ```javascript
-import { create } from '@commp/js'
+import { create } from '@hugomrdias/commp-js'
 
 const hasher = create()
 hasher.write(chunk1)

@@ -78,7 +78,7 @@ Useful options: `--variants rust,go`, `--sizes 32MiB,4GiB`, `--iters 5`,
 | `go-nosha` | `go-stdlib`, `GODEBUG=cpu.sha=off` (amd64) or `cpu.sha2=off` (arm64) | AVX2 or generic |
 | `go-nosha-1core` | same, `GOMAXPROCS=1` | as `go-nosha` |
 | `go-generic` (amd64 only) | `go-stdlib`, `GODEBUG=cpu.sha=off,cpu.avx2=off` | generic |
-| `wasm` | `@commp/wasm` (the committed inline build) in Node | 4-lane SIMD128 in WASM, no hardware SHA |
+| `wasm` | `@hugomrdias/commp-wasm` (the committed inline build) in Node | 4-lane SIMD128 in WASM, no hardware SHA |
 
 Every variant reports the backend it chose (the `SHA-256 backend` column), so a
 results file shows what each run actually used.
@@ -122,7 +122,7 @@ which points sha256-simd at [go/sha256stdlib](go/sha256stdlib).
 - Each run also records what was measured: the repo commit, and a fingerprint
   of any uncommitted changes to `rs/commp`, `packages/commp-wasm/src` or the
   CLIs. It also records the go-fil-commp-hashhash, sha256-simd and sha2
-  versions, the `@commp/wasm` version, and a hash of its inline WASM. Commit
+  versions, the `@hugomrdias/commp-wasm` version, and a hash of its inline WASM. Commit
   before a run you plan to share, so the results point at a real commit.
 
 ## Layout

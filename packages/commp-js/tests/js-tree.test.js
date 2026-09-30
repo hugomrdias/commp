@@ -1,5 +1,5 @@
 /**
- * @commp/js streaming tree tests
+ * @hugomrdias/commp-js streaming tree tests
  */
 
 import assert from 'node:assert'
@@ -31,7 +31,7 @@ function naiveTree(leaves) {
   return { height, root: level[0] }
 }
 
-describe('@commp/js Stack', () => {
+describe('@hugomrdias/commp-js Stack', () => {
   it('fold matches a naive tree for 2 to 600 leaves', () => {
     const leaves = Array.from({ length: 600 }, (_, i) => {
       const block = new Uint8Array(64)

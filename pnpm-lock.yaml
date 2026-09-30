@@ -190,10 +190,10 @@ importers:
 
   packages/bench:
     dependencies:
-      '@commp/js':
+      '@hugomrdias/commp-js':
         specifier: workspace:*
         version: link:../commp-js
-      '@commp/wasm':
+      '@hugomrdias/commp-wasm':
         specifier: workspace:*
         version: link:../commp-wasm
       '@web3-storage/data-segment':
@@ -218,7 +218,7 @@ importers:
 
   packages/commp-wasm:
     devDependencies:
-      '@commp/js':
+      '@hugomrdias/commp-js':
         specifier: workspace:*
         version: link:../commp-js
       '@web3-storage/data-segment':
