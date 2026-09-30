@@ -2,7 +2,7 @@
 
 Fast CommP (Filecoin Piece Commitment) implementation in Rust/WASM.
 
-Up to **~15x faster** than the original JavaScript implementation, with inline base64 WASM for zero-config usage. The WASM build hashes 4 SHA-256 messages at once with SIMD and streams with O(log n) memory.
+Up to **~15x faster** than the original JavaScript implementation in Node (**~11–34x** in browsers), with inline base64 WASM for zero-config usage. The WASM build hashes 4 SHA-256 messages at once with SIMD and streams with O(log n) memory.
 
 ## Benchmarks
 
@@ -16,16 +16,16 @@ Node 26, Apple Silicon, 1 MiB streaming (`pnpm bench`):
 | Fast JS (`@webbuf/sha256`) | 41.4 | 3.52x |
 | **Rust WASM (inline base64)** | **181.2** | **15.38x** |
 
-### Chrome
+### Browsers
 
-Measured before 4-lane SIMD hashing, which roughly doubled WASM throughput in Node:
+Apple Silicon, 1 MiB streaming, via [playwright-test](https://github.com/hugomrdias/playwright-test) (`pnpm bench:browser --browser <name>`):
 
-| Implementation | MiB/s | Speedup |
-| --- | --- | --- |
-| Original JS (`@web3-storage/data-segment`) | 7.9 | 1.00x |
-| Fast JS (`@webbuf/sha256`) | 42.0 | 5.33x |
-| **Rust WASM (inline base64)** | **82.0** | **10.40x** |
-
+| Implementation | Chromium 153 | Firefox 155 | WebKit (Safari 26.6) |
+| --- | --- | --- | --- |
+| Original JS (`@web3-storage/data-segment`) | 7.5 | 5.0 | 16.5 |
+| Fast JS (`@webbuf/sha256`) | 43.8 | 31.7 | 36.4 |
+| **Rust WASM (inline base64)** | **185.6** | **170.7** | **187.3** |
+| WASM speedup vs original | 24.8x | 34.2x | 11.3x |
 
 ## Quick Start
 
@@ -193,6 +193,9 @@ pnpm test
 
 # Run benchmarks
 pnpm bench
+
+# Run benchmarks in a browser (chromium, firefox or webkit)
+pnpm bench:browser --browser firefox
 ```
 
 ## How It Works
