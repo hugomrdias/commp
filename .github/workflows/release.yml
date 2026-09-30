@@ -41,9 +41,9 @@ jobs:
           require-lockfile: true
       - run: pnpm build
       - run: pnpm check
-      - name: Publish @commp/js
+      - name: Publish @hugomrdias/commp-js
         if: contains(fromJson(needs.release.outputs.paths_released), 'packages/commp-js')
         run: pnpm --filter ./packages/commp-js publish --access=public
-      - name: Publish @commp/wasm
+      - name: Publish @hugomrdias/commp-wasm
         if: contains(fromJson(needs.release.outputs.paths_released), 'packages/commp-wasm')
         run: pnpm --filter ./packages/commp-wasm publish --access=public

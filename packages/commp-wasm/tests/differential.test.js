@@ -2,13 +2,13 @@
  * Full-digest differential tests
  *
  * Compares the complete multihash bytes (code, size, padding, height, root)
- * of @commp/js, the raw WASM bindings and the @commp/wasm wrapper against
+ * of @hugomrdias/commp-js, the raw WASM bindings and the @hugomrdias/commp-wasm wrapper against
  * @web3-storage/data-segment as the reference implementation.
  */
 
 import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
-import * as JS from '@commp/js'
+import * as JS from '@hugomrdias/commp-js'
 import * as Ref from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
 import * as JSVarint from '../../commp-js/src/varint.js'
@@ -96,7 +96,7 @@ const reference = {
 /** @type {Impl[]} */
 const impls = [
   {
-    name: '@commp/js',
+    name: '@hugomrdias/commp-js',
     create() {
       const hasher = JS.create()
       return {
@@ -107,7 +107,7 @@ const impls = [
     },
   },
   {
-    name: '@commp/wasm',
+    name: '@hugomrdias/commp-wasm',
     create() {
       const hasher = Wasm.create()
       return {
@@ -227,7 +227,7 @@ describe('full digest matches data-segment', function () {
 
   // The wrapper feeds inputs over 1 MiB to WASM in 1 MiB chunks, which
   // aren't a multiple of 127, so quads straddle chunks
-  it('@commp/wasm one-shot over the 1 MiB chunk size', () => {
+  it('@hugomrdias/commp-wasm one-shot over the 1 MiB chunk size', () => {
     const data = randomBytes(5 * (1 << 20) + 1000, 11)
     const expected = Ref.digest(data)
     assertPieceDigest(Wasm.digest(data), expected)
@@ -363,7 +363,7 @@ describe('MAX_PAYLOAD_SIZE', () => {
     assert.strictEqual(Wasm.MAX_PAYLOAD_SIZE, JS.MAX_PAYLOAD_SIZE)
   })
 
-  it('@commp/js throws RangeError and leaves the hasher unchanged', () => {
+  it('@hugomrdias/commp-js throws RangeError and leaves the hasher unchanged', () => {
     const hasher = JS.create()
     // @ts-expect-error private field, to avoid writing ~16 PiB
     hasher.bytesWritten = JS.MAX_PAYLOAD_SIZE - 10n
@@ -378,7 +378,7 @@ describe('MAX_PAYLOAD_SIZE', () => {
     hasher.write(new Uint8Array(0))
   })
 
-  it('@commp/wasm rejects a multi-chunk write before writing any chunk', () => {
+  it('@hugomrdias/commp-wasm rejects a multi-chunk write before writing any chunk', () => {
     const hasher = Wasm.create()
     hasher.count = () => Wasm.MAX_PAYLOAD_SIZE - 10n
     assert.throws(() => hasher.write(new Uint8Array(3 << 20)), {

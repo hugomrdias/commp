@@ -1,5 +1,5 @@
 {
-  "name": "@commp/wasm",
+  "name": "@hugomrdias/commp-wasm",
   "version": "0.0.0",
   "description": "Fast CommP (Filecoin Piece Commitment) WASM implementation with inline base64",
   "keywords": [
@@ -38,7 +38,7 @@
     "lint": "biome check ."
   },
   "devDependencies": {
-    "@commp/js": "workspace:*",
+    "@hugomrdias/commp-js": "workspace:*",
     "@web3-storage/data-segment": "catalog:",
     "mocha": "catalog:"
   }

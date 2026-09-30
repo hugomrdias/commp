@@ -189,7 +189,7 @@ const VARIANTS = [
     : []),
   {
     id: 'wasm',
-    desc: '@commp/wasm (committed inline build) in Node',
+    desc: '@hugomrdias/commp-wasm (committed inline build) in Node',
     impl: 'wasm',
     bin: 'wasm',
     memory: true,

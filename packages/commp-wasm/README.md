@@ -1,17 +1,17 @@
-# @commp/wasm
+# @hugomrdias/commp-wasm
 
 Fast CommP (Filecoin Piece Commitment) in Rust/WASM with 4-lane SIMD SHA-256. The WASM is inlined as base64, so there is no async init and no bundler configuration.
 
 ## Install
 
 ```bash
-npm install @commp/wasm
+npm install @hugomrdias/commp-wasm
 ```
 
 ## Usage
 
 ```javascript
-import { create, digest, root } from '@commp/wasm'
+import { create, digest, root } from '@hugomrdias/commp-wasm'
 
 // One-shot: just the 32-byte root
 const rootHash = root(data)

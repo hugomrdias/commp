@@ -38,7 +38,7 @@ writes one results file per machine (`pnpm compare`).
 
 ```javascript
 // Just import and use - no async init needed!
-import { create, root, digest } from "@commp/wasm";
+import { create, root, digest } from "@hugomrdias/commp-wasm";
 
 // One-shot API - just get the 32-byte root
 const data = new Uint8Array(1024 * 1024).fill(0x42);
@@ -62,14 +62,14 @@ A pnpm workspace orchestrated with [Turborepo](https://turborepo.com), released 
 ```text
 commp/
 ├── packages/
-│   ├── commp-wasm/                  # @commp/wasm - Rust WASM package
+│   ├── commp-wasm/                  # @hugomrdias/commp-wasm - Rust WASM package
 │   │   ├── src/
 │   │   │   ├── index.js             # Main entry point
 │   │   │   └── inline/              # Inline base64 WASM (generated, committed)
 │   │   ├── scripts/
 │   │   │   └── build-inline-wasm.js # Converts WASM to inline base64
 │   │   └── tests/                   # Vector and differential tests vs data-segment
-│   ├── commp-js/                    # @commp/js - Pure JS package
+│   ├── commp-js/                    # @hugomrdias/commp-js - Pure JS package
 │   │   ├── src/
 │   │   └── tests/
 │   └── bench/                       # Benchmarks (private, not published)
@@ -121,7 +121,7 @@ Created: packages/commp-wasm/src/inline/commp_wasm.js
 Works in Node.js, browsers, Deno, and Bun with no async init required:
 
 ```javascript
-import { create, root, digest } from "@commp/wasm";
+import { create, root, digest } from "@hugomrdias/commp-wasm";
 
 // One-shot: just get the 32-byte root
 const data = new Uint8Array(1024 * 1024);
