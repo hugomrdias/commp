@@ -200,7 +200,12 @@ pnpm bench
 
 # Run benchmarks in a browser (chromium, firefox or webkit)
 pnpm bench:browser --browser firefox
+
+# Run Rust tests (from rs/commp)
+cargo test --lib --tests
 ```
+
+The Rust tests include the Lotus-generated vectors from go-fil-commp-hashhash, up to 16 MiB by default. See [rs/commp/tests/fixtures](rs/commp/tests/fixtures/README.md) to run larger ones.
 
 ## How It Works
 

@@ -973,4 +973,39 @@ mod tests {
         expected.write(&[0x43u8; 1000]).unwrap();
         assert_eq!(hasher.digest(), expected.digest());
     }
+
+    #[test]
+    fn test_reset() {
+        // Ported from go-fil-commp-hashhash's Reset tests
+        let empty = CommPHasher::new().digest();
+
+        // Before any write, and after an empty write
+        let mut hasher = CommPHasher::new();
+        hasher.reset();
+        hasher.write(&[]).unwrap();
+        hasher.reset();
+        assert_eq!(hasher.digest(), empty);
+
+        // After a write that only fills the quad buffer, repeatedly
+        hasher.write(&[0x42]).unwrap();
+        hasher.reset();
+        hasher.reset();
+        hasher.reset();
+        assert_eq!(hasher.count(), 0);
+        assert_eq!(hasher.digest(), empty);
+
+        // After a full batch and a partial quad, then reused
+        let data: Vec<u8> = (0..BATCH_QUADS * IN_BYTES_PER_QUAD * 2 + 64).map(|i| i as u8).collect();
+        hasher.write(&data).unwrap();
+        let _ = hasher.digest();
+        hasher.reset();
+        assert_eq!(hasher.digest(), empty);
+
+        let data2: Vec<u8> = (0..127).map(|i| i as u8).collect();
+        hasher.write(&data2).unwrap();
+        let mut fresh = CommPHasher::new();
+        fresh.write(&data2).unwrap();
+        assert_eq!(hasher.digest(), fresh.digest());
+        assert_eq!(32u64 << hasher.height(), 128);
+    }
 }
