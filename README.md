@@ -57,18 +57,20 @@ commp/
 │   └── src/lib.rs
 ├── ts/
 │   ├── npm-commp-wasm/          # @commp/wasm - Rust WASM package
-│   │   └── src/
-│   │       ├── index.ts         # Main entry point
-│   │       └── inline/          # Inline base64 WASM (generated)
-│   └── npm-commp-js/            # @commp/js - Pure JS package
-│       └── src/
-│           ├── index.js         # Main entry point
-│           └── ...
+│   │   ├── src/
+│   │   │   ├── index.ts         # Main entry point
+│   │   │   └── inline/          # Inline base64 WASM (generated)
+│   │   └── tests/               # WASM-only tests
+│   ├── npm-commp-js/            # @commp/js - Pure JS package
+│   │   ├── src/
+│   │   │   ├── index.js         # Main entry point
+│   │   │   └── ...
+│   │   └── tests/               # JS-only tests
+│   └── tests/
+│       ├── differential.test.js # Cross-package tests vs data-segment
+│       └── vectors.csv          # Test vectors from storacha/data-segment
 ├── scripts/
 │   └── build-inline-wasm.js     # Converts WASM to inline base64
-├── test/
-│   ├── commp.test.js            # Mocha tests
-│   └── vectors.csv              # Test vectors from storacha/data-segment
 └── bench.js                     # Performance benchmarks
 ```
 

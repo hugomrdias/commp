@@ -8,10 +8,7 @@ import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
 import * as HasherOriginal from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
-import {
-  CommPHasher,
-  root,
-} from '../ts/npm-commp-wasm/src/inline/commp_wasm.js'
+import { CommPHasher, root } from '../src/inline/commp_wasm.js'
 
 /**
  * Convert Uint8Array to hex string
@@ -63,7 +60,10 @@ function getWasmOneShotRoot(data) {
  * @returns {Array<{contentSize: number, paddedSize: number, pieceSize: number}>}
  */
 function loadVectors() {
-  const csv = readFileSync(new URL('./vectors.csv', import.meta.url), 'utf-8')
+  const csv = readFileSync(
+    new URL('../../tests/vectors.csv', import.meta.url),
+    'utf-8',
+  )
   const [, ...lines] = csv.trim().split('\n')
   return lines.map((line) => {
     const [contentSize, , paddedSize, pieceSize] = line.split(',')

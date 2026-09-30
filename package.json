@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "mocha 'test/**/*.test.js'",
+    "test": "mocha 'ts/tests/*.test.js' 'ts/*/tests/*.test.js'",
     "bench": "node bench.js",
     "bench:browser": "playwright-test bench.js --runner none",
     "lint": "biome check .",

@@ -10,12 +10,12 @@ import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
 import * as Ref from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
-import * as JS from '../ts/npm-commp-js/src/index.js'
-import * as JSVarint from '../ts/npm-commp-js/src/varint.js'
-import * as Wasm from '../ts/npm-commp-wasm/src/index.js'
-import { CommPHasher } from '../ts/npm-commp-wasm/src/inline/commp_wasm.js'
-import { wasm } from '../ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js'
-import * as WasmVarint from '../ts/npm-commp-wasm/src/varint.js'
+import * as JS from '../npm-commp-js/src/index.js'
+import * as JSVarint from '../npm-commp-js/src/varint.js'
+import * as Wasm from '../npm-commp-wasm/src/index.js'
+import { CommPHasher } from '../npm-commp-wasm/src/inline/commp_wasm.js'
+import { wasm } from '../npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js'
+import * as WasmVarint from '../npm-commp-wasm/src/varint.js'
 
 /**
  * @param {Uint8Array} bytes
@@ -160,7 +160,7 @@ function assertAllMatch(chunks) {
 /**
  * Assert that a PieceDigest object is consistent with the reference digest
  *
- * @param {import('../ts/npm-commp-js/src/types.js').PieceDigest} actual
+ * @param {import('../npm-commp-js/src/types.js').PieceDigest} actual
  * @param {ReturnType<typeof Ref.digest>} expected
  */
 function assertPieceDigest(actual, expected) {
@@ -253,7 +253,7 @@ describe('full digest matches data-segment', function () {
 
 describe('inline wasm loader', () => {
   const loaderUrl = new URL(
-    '../ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js',
+    '../npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js',
     import.meta.url,
   )
   const fromBase64 = Uint8Array.fromBase64

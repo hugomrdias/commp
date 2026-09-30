@@ -4,9 +4,9 @@
 
 import assert from 'node:assert'
 import { describe, it } from 'mocha'
-import { truncatedHash } from '../ts/npm-commp-js/src/hash.js'
-import { Stack } from '../ts/npm-commp-js/src/tree.js'
-import { fromLevel } from '../ts/npm-commp-js/src/zero-comm.js'
+import { truncatedHash } from '../src/hash.js'
+import { Stack } from '../src/tree.js'
+import { fromLevel } from '../src/zero-comm.js'
 
 /**
  * Naive level-by-level tree over level-1 leaves, padding odd levels
