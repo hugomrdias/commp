@@ -1,0 +1,100 @@
+name: Compare
+
+# Rust vs Go CommP comparison (compare/README.md) on each GitHub runner CPU.
+# Results show up in the run's summary and as artifacts; nothing is committed.
+# Shared runners are noisy VMs, so treat the numbers as indicative and run
+# on dedicated machines for anything precise.
+on:
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: Smaller payloads and fewer vectors (~2 min per runner)
+        type: boolean
+        default: true
+      variants:
+        description: Comma-separated variants (empty for the default set)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  compare:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-latest # x64, usually AMD EPYC with SHA-NI
+          - ubuntu-24.04-arm # arm64, Neoverse with SHA2
+          - macos-latest # Apple Silicon
+          - macos-15-intel # x64 Intel Mac
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: compare/go/go.mod
+          cache-dependency-path: |
+            compare/go/go.sum
+            compare/go/go.stdlib.sum
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # Installs the toolchain pinned in compare/rust/rust-toolchain.toml
+      - run: rustup show
+        working-directory: compare/rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: compare/rust -> ../.build/rust
+
+      - name: Run comparison
+        run: >-
+          node compare/run.js all
+          --label gha-${{ matrix.runner }}
+          --out "$RUNNER_TEMP/results"
+          ${{ inputs.quick && '--quick' || '' }}
+          ${{ inputs.variants && format('--variants {0}', inputs.variants) || '' }}
+
+      - if: always()
+        run: cat "$RUNNER_TEMP"/results/*.md >> "$GITHUB_STEP_SUMMARY" || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compare-${{ matrix.runner }}
+          path: ${{ runner.temp }}/results/
+          if-no-files-found: ignore
+
+  report:
+    needs: compare
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: compare-*
+          path: results
+          merge-multiple: true
+      - run: node compare/run.js report --out results
+      - name: Write summary
+        run: |
+          cat results/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+          for f in results/gha-*.md; do
+            printf '\n<details><summary>%s</summary>\n\n' "$(basename "$f" .md)"
+            # Demote headings so each machine nests under the summary
+            sed 's/^#/##/' "$f"
+            printf '\n</details>\n'
+          done >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compare-results
+          path: results/
