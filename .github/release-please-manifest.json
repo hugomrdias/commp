@@ -1,4 +1,4 @@
 {
   "packages/commp-js": "0.0.0",
-  "packages/commp-wasm": "0.0.0"
+  "packages/commp-wasm": "0.1.0"
 }
