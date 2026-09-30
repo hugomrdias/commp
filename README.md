@@ -110,8 +110,8 @@ node scripts/build-inline-wasm.js
 Output:
 
 ```text
-WASM binary size: 32613 bytes
-Base64 size: 43484 chars
+WASM binary size: 21903 bytes
+Base64 size: 29204 chars
 Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js
 Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.js
 Created: ts/npm-commp-wasm/src/inline/commp_wasm.js

@@ -6,8 +6,24 @@
 //! - O(log n) streaming memory
 //! - Integer-only size calculations
 
-use sha2::{Digest, Sha256};
+#![cfg_attr(target_arch = "wasm32", no_std)]
+
+extern crate alloc;
+
+use alloc::{string::String, vec::Vec};
 use wasm_bindgen::prelude::*;
+
+/// Trap without formatting a message, so no `core::fmt` code gets linked
+#[cfg(target_arch = "wasm32")]
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! {
+    core::arch::wasm32::unreachable()
+}
+
+// Smaller than std's dlmalloc
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static TALC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
 // `RUSTFLAGS` in the environment replaces `.cargo/config.toml` rustflags,
 // which would silently drop SIMD and halve throughput
@@ -87,8 +103,12 @@ const BATCH_LEVEL: usize = BATCH_LEAVES.trailing_zeros() as usize;
 
 /// Pre-computed zero commitment nodes for each level (lazily initialized)
 fn get_zero_comm(level: usize) -> [u8; NODE_SIZE] {
+    #[cfg(not(target_arch = "wasm32"))]
     static ZERO_COMMS: std::sync::OnceLock<[[u8; NODE_SIZE]; MAX_LEVEL]> = std::sync::OnceLock::new();
-    
+    #[cfg(target_arch = "wasm32")]
+    static ZERO_COMMS: SingleThreaded<core::cell::OnceCell<[[u8; NODE_SIZE]; MAX_LEVEL]>> =
+        SingleThreaded(core::cell::OnceCell::new());
+
     ZERO_COMMS.get_or_init(|| {
         let mut comms = [[0u8; NODE_SIZE]; MAX_LEVEL];
         let mut concat = [0u8; NODE_SIZE * 2];
@@ -102,12 +122,47 @@ fn get_zero_comm(level: usize) -> [u8; NODE_SIZE] {
     })[level]
 }
 
-/// Compute truncated SHA256 hash for 64-byte input (optimized path)
-#[inline(always)]
+/// Lets a `static` hold a non-`Sync` value on wasm32
+#[cfg(target_arch = "wasm32")]
+struct SingleThreaded<T>(T);
+
+// SAFETY: without the `atomics` target feature wasm32 has no threads
+#[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
+unsafe impl<T> Sync for SingleThreaded<T> {}
+
+#[cfg(target_arch = "wasm32")]
+impl<T> core::ops::Deref for SingleThreaded<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+/// SHA-256 initial state
+const IV: [u32; 8] = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+];
+
+/// Padding block of a 64-byte message: `0x80`, zeros, then the bit length 512
+const PAD_BLOCK: [u8; 64] = {
+    let mut block = [0u8; 64];
+    block[0] = 0x80;
+    block[62] = 0x02;
+    block
+};
+
+/// Compute truncated SHA256 hash for 64-byte input
+///
+/// Calls the raw compression function directly: the input is always one
+/// block, so `Digest`'s buffering and padding logic is dead weight.
+#[inline(never)]
 fn truncated_hash_64(data: &[u8; 64]) -> [u8; NODE_SIZE] {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    let mut result: [u8; NODE_SIZE] = hasher.finalize().into();
+    let mut state = IV;
+    sha2::block_api::compress256(&mut state, &[*data, PAD_BLOCK]);
+    let mut result = [0u8; NODE_SIZE];
+    for (bytes, word) in result.chunks_exact_mut(4).zip(state) {
+        bytes.copy_from_slice(&word.to_be_bytes());
+    }
     result[NODE_SIZE - 1] &= 0b00111111;
     result
 }
@@ -131,12 +186,8 @@ use simd::hash_many;
 /// lane of a `v128`.
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod simd {
-    use super::{truncated_hash_64, NODE_SIZE};
+    use super::{truncated_hash_64, IV, NODE_SIZE};
     use core::arch::wasm32::*;
-
-    const IV: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-    ];
 
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -302,8 +353,18 @@ mod simd {
         for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
             hash4(m.try_into().unwrap(), o.try_into().unwrap());
         }
-        for (msg, node) in msg_groups.remainder().iter().zip(out_groups.into_remainder()) {
-            *node = truncated_hash_64(msg);
+        // A lone message is cheaper scalar; 2 or 3 share one padded group,
+        // hashed by recursing so `hash4` is only inlined into the loop above
+        match (msg_groups.remainder(), out_groups.into_remainder()) {
+            ([], _) => {}
+            ([msg], [node]) => *node = truncated_hash_64(msg),
+            (rest, nodes) => {
+                let mut group = [[0u8; 64]; 4];
+                let mut out = [[0u8; NODE_SIZE]; 4];
+                group[..rest.len()].copy_from_slice(rest);
+                hash_many(&group, &mut out);
+                nodes.copy_from_slice(&out[..nodes.len()]);
+            }
         }
     }
 }
@@ -319,6 +380,7 @@ fn as_pairs(nodes: &[[u8; NODE_SIZE]]) -> &[[u8; 64]] {
 /// Reduce `len` nodes at tree `height` by `steps` levels, pairing an odd
 /// trailing node with a zero commitment. The result is left at the start of
 /// `nodes`; returns the remaining count.
+#[inline(never)]
 fn reduce(nodes: &mut [[u8; NODE_SIZE]], mut len: usize, mut height: usize, steps: usize) -> usize {
     let mut next = [[0u8; NODE_SIZE]; BATCH_LEAVES / 2];
     for _ in 0..steps {
@@ -400,7 +462,10 @@ struct Stack {
 impl Stack {
     fn new() -> Self {
         Stack {
-            nodes: [[0u8; NODE_SIZE]; MAX_LEVEL],
+            // A memset: the `[[0; 32]; 64]` literal is unrolled into 128 SIMD
+            // stores at every call site, ~3KB each
+            // SAFETY: all-zero bytes are a valid [[u8; 32]; 64]
+            nodes: unsafe { core::mem::zeroed() },
             count: 0,
         }
     }
