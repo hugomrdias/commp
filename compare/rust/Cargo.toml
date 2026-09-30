@@ -10,7 +10,7 @@ name = "commp-rust"
 path = "src/main.rs"
 
 [dependencies]
-commp-wasm = { path = "../../rs/commp" }
+commp = { path = "../../rs/commp" }
 libc = "0.2"
 
 [lints.rust]

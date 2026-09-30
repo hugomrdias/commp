@@ -1,5 +1,5 @@
 [package]
-name = "commp-wasm"
+name = "commp"
 version = "0.1.0"
 edition = "2021"
 description = "Fast CommP (Filecoin Piece Commitment) implementation for WASM"

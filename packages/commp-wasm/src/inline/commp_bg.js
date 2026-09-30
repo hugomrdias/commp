@@ -263,7 +263,7 @@ export function __wbg___wbindgen_throw_dd24417ed36fc46e(arg0, arg1) {
     throw new Error(getStringFromWasm0(arg0, arg1));
 };
 
-export function __wbg_new_2a566a36a8723934(arg0, arg1) {
+export function __wbg_new_9909933006805bd0(arg0, arg1) {
     const ret = new RangeError(getStringFromWasm0(arg0, arg1));
     return addHeapObject(ret);
 };

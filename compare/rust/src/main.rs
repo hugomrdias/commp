@@ -8,7 +8,7 @@ use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Instant;
 
-use commp_wasm::CommPHasher;
+use commp::CommPHasher;
 
 /// Stdin is fed to the hasher in this cycle of sizes to exercise partial quads
 const READ_SIZES: [usize; 8] = [1, 31, 127, 128, 1000, 4096, 65536, 1 << 20];

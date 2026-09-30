@@ -30,7 +30,7 @@ function info() {
       ).version,
       // The package version rarely changes; this pins the exact binary
       'inline wasm sha256': createHash('sha256')
-        .update(readFileSync(new URL('src/inline/commp_wasm_bg.wasm.js', pkg)))
+        .update(readFileSync(new URL('src/inline/commp_bg.wasm.js', pkg)))
         .digest('hex')
         .slice(0, 16),
     },

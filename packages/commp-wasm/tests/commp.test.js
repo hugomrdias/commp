@@ -8,7 +8,7 @@ import assert from 'node:assert'
 import { readFileSync } from 'node:fs'
 import * as HasherOriginal from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
-import { CommPHasher, root } from '../src/inline/commp_wasm.js'
+import { CommPHasher, root } from '../src/inline/commp.js'
 
 /**
  * Convert Uint8Array to hex string

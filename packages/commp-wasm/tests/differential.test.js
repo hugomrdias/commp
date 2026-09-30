@@ -13,8 +13,8 @@ import * as Ref from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
 import * as JSVarint from '../../commp-js/src/varint.js'
 import * as Wasm from '../src/index.js'
-import { CommPHasher } from '../src/inline/commp_wasm.js'
-import { wasm } from '../src/inline/commp_wasm_bg.wasm.js'
+import { CommPHasher } from '../src/inline/commp.js'
+import { wasm } from '../src/inline/commp_bg.wasm.js'
 import * as WasmVarint from '../src/varint.js'
 
 /**
@@ -252,10 +252,7 @@ describe('full digest matches data-segment', function () {
 })
 
 describe('inline wasm loader', () => {
-  const loaderUrl = new URL(
-    '../src/inline/commp_wasm_bg.wasm.js',
-    import.meta.url
-  )
+  const loaderUrl = new URL('../src/inline/commp_bg.wasm.js', import.meta.url)
   const fromBase64 = Uint8Array.fromBase64
   const NodeBuffer = globalThis.Buffer
 
