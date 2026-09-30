@@ -9,6 +9,7 @@
     "test": "mocha 'ts/tests/*.test.js' 'ts/*/tests/*.test.js'",
     "bench": "node bench.js",
     "bench:browser": "playwright-test bench.js --runner none",
+    "compare": "node compare/run.js",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."
   },

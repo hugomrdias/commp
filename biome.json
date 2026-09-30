@@ -14,7 +14,8 @@
       "!**/dist",
       "!**/pkg-bundler",
       "!**/node_modules",
-      "!**/inline"
+      "!**/inline",
+      "!compare/results"
     ]
   },
   "formatter": {

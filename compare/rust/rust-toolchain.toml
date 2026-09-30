@@ -1,0 +1,3 @@
+# Same toolchain as rs/commp, so every machine compiles the same code
+[toolchain]
+channel = "1.92.0"
