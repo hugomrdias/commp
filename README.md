@@ -75,7 +75,13 @@ commp/
 │   └── bench/                       # Benchmarks (private, not published)
 ├── rs/commp/                        # Rust WASM crate
 │   ├── Cargo.toml
-│   ├── src/lib.rs
+│   ├── src/
+│   │   ├── lib.rs                   # Crate setup, constants, one-shot digest/root
+│   │   ├── hasher.rs                # Streaming CommPHasher
+│   │   ├── fr32.rs                  # FR32 padding
+│   │   ├── tree.rs                  # Zero commitments, subtree stack
+│   │   ├── multihash.rs             # Digest encoding
+│   │   └── sha256/                  # Multi-message SHA-256 backends
 │   └── tests/                       # go-fil-commp-hashhash known-answer tests
 ├── compare/                         # Rust/WASM vs go-fil-commp-hashhash comparison
 └── .github/

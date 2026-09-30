@@ -15,7 +15,7 @@ wasm-bindgen = { version = "0.2", default-features = false }
 # Scalar SHA-256 (raw `compress256` only) for zero commitments, lone leftover
 # nodes and native builds. On wasm32, +simd128 selects its SIMD message
 # schedule; leaves and tree nodes are hashed 4 at a time by the crate's own
-# `simd` module.
+# `sha256::wasm` module.
 sha2 = { version = "0.11", default-features = false }
 
 # Behind the `parallel` feature: hashes large writes on all cores
