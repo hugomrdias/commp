@@ -26,6 +26,56 @@ const OUT_BYTES_PER_QUAD: usize = 128;
 /// Maximum tree levels
 const MAX_LEVEL: usize = 64;
 
+/// Largest payload accepted, in bytes: 127 * 2^47 (~15.9 PiB)
+///
+/// data-segment allows up to tree height 255, far beyond `u64`. This is the
+/// largest payload for which every derived size (padding, piece size) stays
+/// below 2^53, so the digest fields are exact as JS numbers.
+pub const MAX_PAYLOAD_SIZE: u64 = (IN_BYTES_PER_QUAD as u64) << 47;
+
+#[wasm_bindgen]
+extern "C" {
+    /// JS `RangeError`, thrown when a write would exceed `MAX_PAYLOAD_SIZE`
+    #[wasm_bindgen(js_name = RangeError)]
+    type RangeError;
+
+    #[wasm_bindgen(constructor, js_class = "RangeError")]
+    fn new(message: &str) -> RangeError;
+}
+
+/// Whether writing `len` more bytes would exceed `MAX_PAYLOAD_SIZE`
+#[inline]
+fn exceeds_max_payload(bytes_written: u64, len: usize) -> bool {
+    bytes_written.saturating_add(len as u64) > MAX_PAYLOAD_SIZE
+}
+
+/// Error message matching data-segment's
+///
+/// Built by hand because `format!` pulls ~2.3 KB of `core::fmt` into the WASM.
+fn max_payload_message(len: usize) -> String {
+    fn push_decimal(out: &mut String, mut n: u64) {
+        let mut digits = [0u8; 20];
+        let mut i = digits.len();
+        loop {
+            i -= 1;
+            digits[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            if n == 0 {
+                break;
+            }
+        }
+        for &digit in &digits[i..] {
+            out.push(digit as char);
+        }
+    }
+
+    let mut message = String::from("Writing ");
+    push_decimal(&mut message, len as u64);
+    message.push_str(" bytes exceeds max payload size of ");
+    push_decimal(&mut message, MAX_PAYLOAD_SIZE);
+    message
+}
+
 /// Quads FR32-padded and hashed together before reducing to one subtree
 const BATCH_QUADS: usize = 128;
 
@@ -462,19 +512,25 @@ impl CommPHasher {
     }
 
     /// Write bytes into the hasher
-    pub fn write(&mut self, bytes: &[u8]) {
-        if bytes.is_empty() {
-            return;
+    ///
+    /// Throws a `RangeError` (without changing the hasher) if the total would
+    /// exceed `MAX_PAYLOAD_SIZE`.
+    pub fn write(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        let len = bytes.len();
+        if exceeds_max_payload(self.bytes_written, len) {
+            return Err(RangeError::new(&max_payload_message(len)).into());
+        }
+        if len == 0 {
+            return Ok(());
         }
 
-        let len = bytes.len();
         self.bytes_written += len as u64;
 
         // Fast path: if we can't complete a quad, just buffer
         if self.offset + len < IN_BYTES_PER_QUAD {
             self.buffer[self.offset..self.offset + len].copy_from_slice(bytes);
             self.offset += len;
-            return;
+            return Ok(());
         }
 
         let mut read_pos = 0;
@@ -502,6 +558,7 @@ impl CommPHasher {
             self.buffer[..remaining].copy_from_slice(&bytes[read_pos..]);
             self.offset = remaining;
         }
+        Ok(())
     }
 
     /// Build final tree and return (height, root)
@@ -641,10 +698,10 @@ fn varint_len(mut num: u64) -> u64 {
 /// Use this when you need the complete Filecoin piece commitment with metadata.
 /// The multihash code 0x1011 identifies this as "fr32-sha256-trunc254-padded-binary-tree".
 #[wasm_bindgen]
-pub fn digest(data: &[u8]) -> Vec<u8> {
+pub fn digest(data: &[u8]) -> Result<Vec<u8>, JsValue> {
     let mut hasher = CommPHasher::new();
-    hasher.write(data);
-    hasher.digest()
+    hasher.write(data)?;
+    Ok(hasher.digest())
 }
 
 /// One-shot root: returns just the 32-byte CommP root hash
@@ -652,10 +709,10 @@ pub fn digest(data: &[u8]) -> Vec<u8> {
 /// Use this when you only need the raw hash without multihash encoding.
 /// This is the Merkle root of the FR32-padded, SHA256-hashed binary tree.
 #[wasm_bindgen]
-pub fn root(data: &[u8]) -> Vec<u8> {
+pub fn root(data: &[u8]) -> Result<Vec<u8>, JsValue> {
     let mut hasher = CommPHasher::new();
-    hasher.write(data);
-    hasher.root()
+    hasher.write(data)?;
+    Ok(hasher.root())
 }
 
 #[cfg(test)]
@@ -684,7 +741,7 @@ mod tests {
     #[test]
     fn test_hasher_basic() {
         let mut hasher = CommPHasher::new();
-        hasher.write(&[0x42u8; 127]);
+        hasher.write(&[0x42u8; 127]).unwrap();
         let root = hasher.root();
         assert_eq!(root.len(), 32);
     }
@@ -721,9 +778,9 @@ mod tests {
         // One quad is 4 FR32 chunks: height 2 (#2)
         let mut hasher = CommPHasher::new();
         assert_eq!(hasher.height(), 2);
-        hasher.write(&[0x42u8; 127]);
+        hasher.write(&[0x42u8; 127]).unwrap();
         assert_eq!(hasher.height(), 2);
-        hasher.write(&[0x42u8; 1]);
+        hasher.write(&[0x42u8; 1]).unwrap();
         assert_eq!(hasher.height(), 3);
     }
 
@@ -807,26 +864,48 @@ mod tests {
             let mut hasher = CommPHasher::new();
             // Odd chunk size so quads straddle writes and batches
             for chunk in data[..size].chunks(1000) {
-                hasher.write(chunk);
+                hasher.write(chunk).unwrap();
             }
             assert_eq!(hasher.build(), naive_commp(&data[..size]), "{size} bytes");
         }
     }
 
     #[test]
+    fn test_max_payload_size() {
+        // Padding and piece size stay exact as JS numbers
+        assert_eq!(MAX_PAYLOAD_SIZE, 17_873_661_021_126_656);
+        assert_eq!(zero_padding(MAX_PAYLOAD_SIZE), 0);
+        assert!(zero_padding(MAX_PAYLOAD_SIZE / 2 + 1) < 1 << 53);
+
+        assert!(!exceeds_max_payload(0, 0));
+        assert!(!exceeds_max_payload(MAX_PAYLOAD_SIZE - 10, 10));
+        assert!(exceeds_max_payload(MAX_PAYLOAD_SIZE - 10, 11));
+        assert!(exceeds_max_payload(MAX_PAYLOAD_SIZE, 1));
+        assert!(!exceeds_max_payload(MAX_PAYLOAD_SIZE, 0));
+        assert!(exceeds_max_payload(u64::MAX, usize::MAX));
+
+        for len in [0, 1, 9, 10, 11, 12345, usize::MAX] {
+            assert_eq!(
+                max_payload_message(len),
+                format!("Writing {len} bytes exceeds max payload size of {MAX_PAYLOAD_SIZE}")
+            );
+        }
+    }
+
+    #[test]
     fn test_build_is_repeatable() {
         let mut hasher = CommPHasher::new();
-        hasher.write(&[0x42u8; 1000]);
+        hasher.write(&[0x42u8; 1000]).unwrap();
         let first = hasher.digest();
         assert_eq!(hasher.digest(), first);
         assert_eq!(hasher.root(), first[first.len() - 32..]);
         assert_eq!(hasher.height(), first[first.len() - 33]);
 
         // Writing after digest matches a single write
-        hasher.write(&[0x43u8; 1000]);
+        hasher.write(&[0x43u8; 1000]).unwrap();
         let mut expected = CommPHasher::new();
-        expected.write(&[0x42u8; 1000]);
-        expected.write(&[0x43u8; 1000]);
+        expected.write(&[0x42u8; 1000]).unwrap();
+        expected.write(&[0x43u8; 1000]).unwrap();
         assert_eq!(hasher.digest(), expected.digest());
     }
 }

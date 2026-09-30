@@ -16,6 +16,7 @@ import {
   CODE_SIZE,
   HEIGHT_SIZE,
   IN_BYTES_PER_QUAD,
+  MAX_PAYLOAD_SIZE,
   MULTIHASH_CODE,
   ROOT_SIZE,
 } from './constants.js'
@@ -99,11 +100,19 @@ class Hasher {
    *
    * @param {Uint8Array} bytes - Bytes to write
    * @returns {this}
+   * @throws {RangeError} If the total would exceed `MAX_PAYLOAD_SIZE`; the
+   * hasher is left unchanged
    */
   write(bytes) {
     const { buffer, layers } = this
     const leaves = layers[0]
     const length = bytes.length
+
+    if (this.bytesWritten + BigInt(length) > MAX_PAYLOAD_SIZE) {
+      throw new RangeError(
+        `Writing ${length} bytes exceeds max payload size of ${MAX_PAYLOAD_SIZE}`,
+      )
+    }
 
     if (length === 0) {
       return this
@@ -287,6 +296,7 @@ export function digest(payload) {
 export {
   HEIGHT_SIZE,
   IN_BYTES_PER_QUAD,
+  MAX_PAYLOAD_SIZE,
   MIN_PAYLOAD_SIZE,
   NODE_SIZE,
   ROOT_SIZE,

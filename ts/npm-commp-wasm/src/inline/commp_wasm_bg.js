@@ -3,6 +3,21 @@ export function __wbg_set_wasm(val) {
     wasm = val;
 }
 
+function addHeapObject(obj) {
+    if (heap_next === heap.length) heap.push(heap.length + 1);
+    const idx = heap_next;
+    heap_next = heap[idx];
+
+    heap[idx] = obj;
+    return idx;
+}
+
+function dropObject(idx) {
+    if (idx < 132) return;
+    heap[idx] = heap_next;
+    heap_next = idx;
+}
+
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
@@ -29,11 +44,24 @@ function getUint8ArrayMemory0() {
     return cachedUint8ArrayMemory0;
 }
 
+function getObject(idx) { return heap[idx]; }
+
+let heap = new Array(128).fill(undefined);
+heap.push(undefined, null, true, false);
+
+let heap_next = heap.length;
+
 function passArray8ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 1, 1) >>> 0;
     getUint8ArrayMemory0().set(arg, ptr / 1);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
+}
+
+function takeObject(idx) {
+    const ret = getObject(idx);
+    dropObject(idx);
+    return ret;
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
@@ -115,12 +143,25 @@ export class CommPHasher {
     }
     /**
      * Write bytes into the hasher
+     *
+     * Throws a `RangeError` (without changing the hasher) if the total would
+     * exceed `MAX_PAYLOAD_SIZE`.
      * @param {Uint8Array} bytes
      */
     write(bytes) {
-        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.commphasher_write(this.__wbg_ptr, ptr0, len0);
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.commphasher_write(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
     }
     /**
      * Get the full multihash-encoded digest
@@ -176,6 +217,11 @@ export function digest(data) {
         wasm.digest(retptr, ptr0, len0);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
         var v2 = getArrayU8FromWasm0(r0, r1).slice();
         wasm.__wbindgen_export(r0, r1 * 1, 1);
         return v2;
@@ -200,6 +246,11 @@ export function root(data) {
         wasm.root(retptr, ptr0, len0);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeObject(r2);
+        }
         var v2 = getArrayU8FromWasm0(r0, r1).slice();
         wasm.__wbindgen_export(r0, r1 * 1, 1);
         return v2;
@@ -210,4 +261,9 @@ export function root(data) {
 
 export function __wbg___wbindgen_throw_dd24417ed36fc46e(arg0, arg1) {
     throw new Error(getStringFromWasm0(arg0, arg1));
+};
+
+export function __wbg_new_2a566a36a8723934(arg0, arg1) {
+    const ret = new RangeError(getStringFromWasm0(arg0, arg1));
+    return addHeapObject(ret);
 };

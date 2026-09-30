@@ -16,7 +16,7 @@ fn main() {
     // Warmup
     for _ in 0..5 {
         let mut hasher = CommPHasher::new();
-        hasher.write(&data);
+        hasher.write(&data).unwrap();
         let _ = hasher.root();
     }
     
@@ -24,7 +24,7 @@ fn main() {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let mut hasher = CommPHasher::new();
-        hasher.write(&data);
+        hasher.write(&data).unwrap();
         let _ = hasher.root();
     }
     let elapsed = start.elapsed();
