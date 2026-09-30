@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      paths_released: ${{ steps.release.outputs.paths_released }}
+      releases_created: ${{ steps.release.outputs.releases_created }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          # needs to be personal token so release PRs can run workflows
+          token: ${{ secrets.GH_TOKEN }}
+          config-file: .github/release-please-config.json
+          manifest-file: .github/release-please-manifest.json
+
+  npm:
+    needs: release
+    if: needs.release.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # npm trusted publishing (OIDC) with provenance
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/setup@v3
+        with:
+          require-lockfile: true
+      - run: pnpm build
+      - run: pnpm check
+      - name: Publish @commp/js
+        if: contains(fromJson(needs.release.outputs.paths_released), 'packages/commp-js')
+        run: pnpm --filter ./packages/commp-js publish --access=public
+      - name: Publish @commp/wasm
+        if: contains(fromJson(needs.release.outputs.paths_released), 'packages/commp-wasm')
+        run: pnpm --filter ./packages/commp-wasm publish --access=public

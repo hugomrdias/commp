@@ -79,7 +79,7 @@ class Hasher {
       this.count() + BigInt(bytes.length) > MAX_PAYLOAD_SIZE
     ) {
       throw new RangeError(
-        `Writing ${bytes.length} bytes exceeds max payload size of ${MAX_PAYLOAD_SIZE}`,
+        `Writing ${bytes.length} bytes exceeds max payload size of ${MAX_PAYLOAD_SIZE}`
       )
     }
     for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {

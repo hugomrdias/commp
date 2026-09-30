@@ -16,8 +16,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const pkgDir = join(__dirname, '../ts/npm-commp-wasm/pkg-bundler')
-const outDir = join(__dirname, '../ts/npm-commp-wasm/src/inline')
+const pkgDir = join(__dirname, '../pkg-bundler')
+const outDir = join(__dirname, '../src/inline')
 
 // Read the wasm binary and base64 encode it
 const wasmPath = join(pkgDir, 'commp_wasm_bg.wasm')

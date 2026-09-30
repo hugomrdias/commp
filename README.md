@@ -57,82 +57,63 @@ hasher.free(); // Free WASM memory when done
 
 ## Project Structure
 
+A pnpm workspace orchestrated with [Turborepo](https://turborepo.com), released with [release-please](https://github.com/googleapis/release-please).
+
 ```text
 commp/
-├── rs/commp/                    # Rust WASM crate
+├── packages/
+│   ├── commp-wasm/                  # @commp/wasm - Rust WASM package
+│   │   ├── src/
+│   │   │   ├── index.js             # Main entry point
+│   │   │   └── inline/              # Inline base64 WASM (generated, committed)
+│   │   ├── scripts/
+│   │   │   └── build-inline-wasm.js # Converts WASM to inline base64
+│   │   └── tests/                   # Vector and differential tests vs data-segment
+│   ├── commp-js/                    # @commp/js - Pure JS package
+│   │   ├── src/
+│   │   └── tests/
+│   └── bench/                       # Benchmarks (private, not published)
+├── rs/commp/                        # Rust WASM crate
 │   ├── Cargo.toml
-│   └── src/lib.rs
-├── ts/
-│   ├── npm-commp-wasm/          # @commp/wasm - Rust WASM package
-│   │   ├── src/
-│   │   │   ├── index.ts         # Main entry point
-│   │   │   └── inline/          # Inline base64 WASM (generated)
-│   │   └── tests/               # WASM-only tests
-│   ├── npm-commp-js/            # @commp/js - Pure JS package
-│   │   ├── src/
-│   │   │   ├── index.js         # Main entry point
-│   │   │   └── ...
-│   │   └── tests/               # JS-only tests
-│   └── tests/
-│       ├── differential.test.js # Cross-package tests vs data-segment
-│       └── vectors.csv          # Test vectors from storacha/data-segment
-├── compare/                     # Rust/WASM vs go-fil-commp-hashhash comparison
-├── scripts/
-│   └── build-inline-wasm.js     # Converts WASM to inline base64
-└── bench.js                     # Performance benchmarks
+│   ├── src/lib.rs
+│   └── tests/                       # go-fil-commp-hashhash known-answer tests
+├── compare/                         # Rust/WASM vs go-fil-commp-hashhash comparison
+└── .github/
+    ├── release-please-config.json
+    └── release-please-manifest.json
 ```
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs/) (stable)
-- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
-- [Node.js](https://nodejs.org/) >= 18
-- [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/) >= 24
+- [pnpm](https://pnpm.io/) >= 11
+- To rebuild the WASM: [Rust](https://rustup.rs/) (stable), [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) and [binaryen](https://github.com/WebAssembly/binaryen) (`wasm-opt`)
 
 ```bash
-# Install Rust (if not installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install wasm-pack
-cargo install wasm-pack
-
 # Install Node.js dependencies
 pnpm install
+
+# Only needed to rebuild the WASM
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo install wasm-pack
 ```
 
 ## Building
 
-### 1. Build Rust to WASM
+The inline WASM in `packages/commp-wasm/src/inline` is committed, so the packages work straight from source. After changing the Rust crate, rebuild it and commit the result (CI fails if it is stale):
 
 ```bash
-cd rs/commp
-wasm-pack build --target bundler --out-dir ../../ts/npm-commp-wasm/pkg-bundler --release
+pnpm build:wasm
 ```
 
-### 2. Generate Inline Base64 WASM
-
-This embeds the WASM binary as a base64 string for synchronous loading (no async init, works everywhere):
-
-```bash
-node scripts/build-inline-wasm.js
-```
-
-Output:
+This runs `wasm-pack` on `rs/commp` and then embeds the binary as a base64 string for synchronous loading (no async init, works everywhere):
 
 ```text
 WASM binary size: 21903 bytes
 Base64 size: 29204 chars
-Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js
-Created: ts/npm-commp-wasm/src/inline/commp_wasm_bg.js
-Created: ts/npm-commp-wasm/src/inline/commp_wasm.js
-```
-
-### 3. Build TypeScript Package (optional)
-
-```bash
-cd ts/npm-commp-wasm
-pnpm install
-pnpm build:ts
+Created: packages/commp-wasm/src/inline/commp_wasm_bg.wasm.js
+Created: packages/commp-wasm/src/inline/commp_wasm_bg.js
+Created: packages/commp-wasm/src/inline/commp_wasm.js
 ```
 
 ## Usage
@@ -140,7 +121,7 @@ pnpm build:ts
 Works in Node.js, browsers, Deno, and Bun with no async init required:
 
 ```javascript
-import { create, root, digest } from "./ts/npm-commp-wasm/src/index.js";
+import { create, root, digest } from "@commp/wasm";
 
 // One-shot: just get the 32-byte root
 const data = new Uint8Array(1024 * 1024);
@@ -202,6 +183,9 @@ Largest payload accepted: `127n * 2n ** 47n` bytes (~15.9 PiB). It is the larges
 ## Testing
 
 ```bash
+# Run tests, lint and root checks for every package
+pnpm check
+
 # Run all tests
 pnpm test
 
@@ -216,6 +200,14 @@ cargo test --lib --tests
 ```
 
 The Rust tests include the Lotus-generated vectors from go-fil-commp-hashhash, up to 16 MiB by default. See [rs/commp/tests/fixtures](rs/commp/tests/fixtures/README.md) to run larger ones.
+
+## Releasing
+
+Releases are managed by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). Each package is versioned independently:
+
+1. Merge commits into `master` using conventional commit messages (`feat:`, `fix:`, `perf:`, ...).
+2. release-please opens a release PR per changed package (e.g. `commp-wasm 0.2.0`) with the version bump and `CHANGELOG.md`.
+3. Merging a release PR tags it (e.g. `commp-wasm-v0.2.0`), creates a GitHub release and publishes the package to npm with trusted publishing.
 
 ## How It Works
 

@@ -1,6 +1,19 @@
-node_modules
-.pnpm-store
+# Dependencies and generated output
+node_modules/
+dist/
+*.tsbuildinfo
+.turbo/
+.pnpm-store/
+
+# Rust, wasm-pack and compare output
+rs/commp/target/
+pkg-bundler/
+compare/.build/
+
+# Logs and editor files
+logs/
+*.log
 .DS_Store
-rs/commp/target
-dist
-compare/.build
+.idea/
+.vscode/*
+!.vscode/extensions.json

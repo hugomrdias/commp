@@ -129,7 +129,7 @@ class Hasher {
 
     if (this.bytesWritten + BigInt(length) > MAX_PAYLOAD_SIZE) {
       throw new RangeError(
-        `Writing ${length} bytes exceeds max payload size of ${MAX_PAYLOAD_SIZE}`,
+        `Writing ${length} bytes exceeds max payload size of ${MAX_PAYLOAD_SIZE}`
       )
     }
 

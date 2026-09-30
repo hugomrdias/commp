@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   # Keep in sync with the local toolchain used to build the committed inline WASM
@@ -16,12 +20,17 @@ env:
 
 jobs:
   rust:
+    name: Rust
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: rs/commp
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
         with:
@@ -29,17 +38,31 @@ jobs:
       - run: cargo test --lib --tests
       - run: cargo build --lib --release --target wasm32-unknown-unknown
 
-  js:
+  check:
+    name: Build and check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       # Installs pnpm (packageManager) and Node (devEngines.runtime) from
       # package.json, then runs `pnpm install --frozen-lockfile`
-      - uses: pnpm/setup@v3
+      - name: Set up pnpm, Node.js, and dependencies
+        uses: pnpm/setup@v3
         with:
           cache: true
           require-lockfile: true
-      - run: pnpm lint
+
+      - name: Cache Turborepo
+        uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'turbo.json') }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
 
       # Rebuild the inline WASM and fail if it differs from the committed copy
       - run: rustup show
@@ -54,12 +77,16 @@ jobs:
         run: |
           curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
-      - run: pnpm --filter @commp/wasm build
+      - run: pnpm build:wasm
       - name: Check inline WASM is up to date
         run: |
-          if ! git diff --exit-code --stat -- ts/npm-commp-wasm/src/inline; then
-            echo "::error::Inline WASM is stale. Run 'pnpm --filter @commp/wasm build' and commit the result."
+          if ! git diff --exit-code --stat -- packages/commp-wasm/src/inline; then
+            echo "::error::Inline WASM is stale. Run 'pnpm build:wasm' and commit the result."
             exit 1
           fi
 
-      - run: pnpm test
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run checks
+        run: pnpm check

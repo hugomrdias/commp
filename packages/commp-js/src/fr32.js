@@ -84,7 +84,7 @@ export function readQuad(source, sourceOffset, leaves, leafOffset) {
   truncatedHashInto(
     FR32_BUFFER.subarray(64, 128),
     leaves,
-    leafOffset + NODE_SIZE,
+    leafOffset + NODE_SIZE
   )
 }
 

@@ -1,0 +1,45 @@
+{
+  "name": "@commp/wasm",
+  "version": "0.0.0",
+  "description": "Fast CommP (Filecoin Piece Commitment) WASM implementation with inline base64",
+  "keywords": [
+    "filecoin",
+    "commp",
+    "piece-commitment",
+    "wasm",
+    "merkle-tree",
+    "fr32"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hugomrdias/commp.git",
+    "directory": "packages/commp-wasm"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/types.ts",
+  "exports": {
+    ".": {
+      "types": "./src/types.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build:rust": "cd ../../rs/commp && RUSTFLAGS=\"-C target-feature=+simd128 --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo\" wasm-pack build --target bundler --out-dir ../../packages/commp-wasm/pkg-bundler --release",
+    "build:inline": "node scripts/build-inline-wasm.js",
+    "build:wasm": "pnpm build:rust && pnpm build:inline",
+    "clean": "rm -rf pkg-bundler",
+    "test": "mocha \"tests/**/*.test.js\"",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@commp/js": "workspace:*",
+    "@web3-storage/data-segment": "catalog:",
+    "mocha": "catalog:"
+  }
+}

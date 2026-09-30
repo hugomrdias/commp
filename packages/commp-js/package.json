@@ -1,0 +1,41 @@
+{
+  "name": "@commp/js",
+  "version": "0.0.0",
+  "description": "Fast CommP (Filecoin Piece Commitment) pure JavaScript implementation",
+  "keywords": [
+    "filecoin",
+    "commp",
+    "piece-commitment",
+    "merkle-tree",
+    "fr32"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hugomrdias/commp.git",
+    "directory": "packages/commp-js"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/types.ts",
+  "exports": {
+    ".": {
+      "types": "./src/types.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "mocha \"tests/**/*.test.js\"",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@webbuf/sha256": "^4.0.1"
+  },
+  "devDependencies": {
+    "mocha": "catalog:"
+  }
+}
