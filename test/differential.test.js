@@ -185,6 +185,10 @@ for (let k = 0; k <= 13; k++) {
     }
   }
 }
+// Around WASM batch boundaries (128 quads = 16,256 bytes)
+for (let k = 1; k <= 4; k++) {
+  for (const delta of [-128, -127, -1, 0, 1, 127]) sizes.add(16_256 * k + delta)
+}
 const randomSize = prng(0xc0ff33)
 for (let i = 0; i < 20; i++) sizes.add(randomSize() % 300_000)
 const sortedSizes = [...sizes].sort((a, b) => a - b)
