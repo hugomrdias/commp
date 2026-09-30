@@ -13,11 +13,18 @@ name = "bench"
 path = "src/bench.rs"
 
 [dependencies]
-wasm-bindgen = "0.2"
-# Scalar SHA-256 for zero commitments, odd batch remainders and native builds.
-# On wasm32, +simd128 selects its SIMD message schedule; leaves and tree nodes
-# are hashed 4 at a time by the crate's own `simd` module.
+# no_std on wasm32 (see lib.rs), so panics and allocation failures trap
+# instead of pulling in std's formatting and dlmalloc
+wasm-bindgen = { version = "0.2", default-features = false }
+# Scalar SHA-256 (raw `compress256` only) for zero commitments, lone leftover
+# nodes and native builds. On wasm32, +simd128 selects its SIMD message
+# schedule; leaves and tree nodes are hashed 4 at a time by the crate's own
+# `simd` module.
 sha2 = { version = "0.11", default-features = false }
+
+# Smaller than std's dlmalloc; realloc-in-place is unused and costs size
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+talc = { version = "5.1.1", features = ["disable-realloc-in-place"] }
 
 [profile.release]
 # Maximum optimization level
