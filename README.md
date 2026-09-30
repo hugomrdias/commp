@@ -27,6 +27,13 @@ Apple Silicon, 1 MiB streaming, via [playwright-test](https://github.com/hugomrd
 | **Rust WASM (inline base64)** | **185.6** | **170.7** | **187.3** |
 | WASM speedup vs original | 24.8x | 34.2x | 11.3x |
 
+### Native and Go
+
+[compare/](compare/README.md) checks the native Rust and WASM builds against
+[go-fil-commp-hashhash](https://github.com/filecoin-project/go-fil-commp-hashhash)
+for correctness, speed and memory. It runs with SHA extensions on and off, and
+writes one results file per machine (`pnpm compare`).
+
 ## Quick Start
 
 ```javascript
@@ -69,6 +76,7 @@ commp/
 │   └── tests/
 │       ├── differential.test.js # Cross-package tests vs data-segment
 │       └── vectors.csv          # Test vectors from storacha/data-segment
+├── compare/                     # Rust/WASM vs go-fil-commp-hashhash comparison
 ├── scripts/
 │   └── build-inline-wasm.js     # Converts WASM to inline base64
 └── bench.js                     # Performance benchmarks

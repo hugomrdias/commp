@@ -1,0 +1,25 @@
+[package]
+name = "commp-cli"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native CLI around rs/commp for compare/run.js"
+
+[[bin]]
+name = "commp-rust"
+path = "src/main.rs"
+
+[dependencies]
+commp-wasm = { path = "../../rs/commp" }
+libc = "0.2"
+
+[lints.rust]
+# Set through RUSTFLAGS by compare/run.js to force sha2's portable backend
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(sha2_backend, values("soft"))'] }
+
+# Same as rs/commp, whose profile is ignored when built as a dependency
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
