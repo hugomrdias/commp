@@ -4,7 +4,9 @@
  * @module
  */
 
-import { sha256Hash } from '@webbuf/sha256'
+// Raw wasm binding: takes/returns plain Uint8Array. The public `sha256Hash`
+// wraps output in WebBuf/FixedBuf, which is ~10x slower for 64-byte inputs.
+import { sha256_hash } from '@webbuf/sha256/dist/rs-webbuf_sha256-inline-base64/webbuf_sha256.js'
 import { NODE_SIZE } from './constants.js'
 
 /**
@@ -36,9 +38,7 @@ export function truncatedHash(data) {
  * @param {number} outOffset - Byte offset of the 32-byte result in `out`
  */
 export function truncatedHashInto(data, out, outOffset) {
-  // @ts-expect-error
-  const hash = sha256Hash(data)
-  out.set(hash._buf, outOffset)
+  out.set(sha256_hash(data), outOffset)
   // Truncate: clear top 2 bits of last byte for field element representation
   out[outOffset + NODE_SIZE - 1] &= 0b00111111
 }

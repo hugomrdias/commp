@@ -23,6 +23,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@webbuf/sha256": "^3.5.0"
+    "@webbuf/sha256": "^4.0.1"
   }
 }
