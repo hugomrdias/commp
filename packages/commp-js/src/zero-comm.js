@@ -70,7 +70,7 @@ const ZERO_COMM = new ZeroComm()
 export function fromLevel(level) {
   if (level < 0 || level >= MAX_LEVEL) {
     throw new Error(
-      `Only levels between 0 and ${MAX_LEVEL - 1} inclusive are available`,
+      `Only levels between 0 and ${MAX_LEVEL - 1} inclusive are available`
     )
   }
   return ZERO_COMM.slice(NODE_SIZE * level, NODE_SIZE * (level + 1))

@@ -60,10 +60,7 @@ function getWasmOneShotRoot(data) {
  * @returns {Array<{contentSize: number, paddedSize: number, pieceSize: number}>}
  */
 function loadVectors() {
-  const csv = readFileSync(
-    new URL('../../tests/vectors.csv', import.meta.url),
-    'utf-8',
-  )
+  const csv = readFileSync(new URL('./vectors.csv', import.meta.url), 'utf-8')
   const [, ...lines] = csv.trim().split('\n')
   return lines.map((line) => {
     const [contentSize, , paddedSize, pieceSize] = line.split(',')
@@ -78,7 +75,7 @@ function loadVectors() {
 // Load vectors and dedupe by contentSize (some sizes appear multiple times)
 const vectors = loadVectors()
 const uniqueSizes = [...new Set(vectors.map((v) => v.contentSize))].sort(
-  (a, b) => a - b,
+  (a, b) => a - b
 )
 
 describe('CommP inline WASM', function () {
@@ -94,7 +91,7 @@ describe('CommP inline WASM', function () {
         assert.strictEqual(
           toHex(actual),
           toHex(expected),
-          `CommP mismatch for ${size} bytes`,
+          `CommP mismatch for ${size} bytes`
         )
       })
     }
@@ -109,7 +106,7 @@ describe('CommP inline WASM', function () {
         assert.strictEqual(
           toHex(actual),
           toHex(expected),
-          `CommP mismatch for ${size} bytes`,
+          `CommP mismatch for ${size} bytes`
         )
       })
     }
@@ -140,7 +137,7 @@ describe('CommP inline WASM', function () {
             assert.strictEqual(
               toHex(actual),
               toHex(expected),
-              `CommP mismatch for ${size} bytes in ${chunkSize}B chunks`,
+              `CommP mismatch for ${size} bytes in ${chunkSize}B chunks`
             )
           })
         }
@@ -165,12 +162,12 @@ describe('CommP inline WASM', function () {
         assert.strictEqual(
           toHex(streamActual),
           toHex(expected),
-          'stream API mismatch',
+          'stream API mismatch'
         )
         assert.strictEqual(
           toHex(oneShotActual),
           toHex(expected),
-          'one-shot API mismatch',
+          'one-shot API mismatch'
         )
       })
     }
@@ -185,7 +182,7 @@ describe('CommP inline WASM', function () {
         assert.strictEqual(
           toHex(streamRoot),
           toHex(oneShotRoot),
-          `stream vs one-shot mismatch for ${size} bytes`,
+          `stream vs one-shot mismatch for ${size} bytes`
         )
       })
     }

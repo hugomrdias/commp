@@ -120,7 +120,7 @@ which points sha256-simd at [go/sha256stdlib](go/sha256stdlib).
   (`sha_ni`, `avx2`, `sha2`, …), whether it runs virtualized, and the toolchain
   versions.
 - Each run also records what was measured: the repo commit, and a fingerprint
-  of any uncommitted changes to `rs/commp`, `ts/npm-commp-wasm/src` or the
+  of any uncommitted changes to `rs/commp`, `packages/commp-wasm/src` or the
   CLIs. It also records the go-fil-commp-hashhash, sha256-simd and sha2
   versions, the `@commp/wasm` version, and a hash of its inline WASM. Commit
   before a run you plan to share, so the results point at a real commit.
@@ -130,7 +130,7 @@ which points sha256-simd at [go/sha256stdlib](go/sha256stdlib).
 ```text
 compare/
 ├── run.js        driver: build, machine info, verify, bench, memory, report
-├── wasm.js       CLI around ts/npm-commp-wasm
+├── wasm.js       CLI around packages/commp-wasm
 ├── go/           CLI around go-fil-commp-hashhash (+ go.stdlib.mod, sha256stdlib/)
 ├── rust/         CLI around rs/commp (separate crate, library untouched)
 └── results/      one <label>.{json,md} per machine, SUMMARY.md

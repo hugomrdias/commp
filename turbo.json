@@ -1,0 +1,22 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "futureFlags": {
+    "globalConfiguration": true
+  },
+  "global": {
+    "env": ["NODE_ENV"],
+    "passThroughEnv": ["CI"],
+    "inputs": ["biome.json"],
+    "ui": "tui"
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "lint": {}
+  }
+}

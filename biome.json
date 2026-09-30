@@ -1,38 +1,28 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["@hugomrdias/configs/biome"],
   "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
+    "defaultBranch": "master"
   },
   "files": {
-    "ignoreUnknown": true,
     "includes": [
-      "**/*.js",
-      "**/*.ts",
-      "**/*.json",
-      "!**/dist",
-      "!**/pkg-bundler",
-      "!**/node_modules",
-      "!**/inline",
-      "!compare/results"
+      "!!**/src/inline",
+      "!!**/pkg-bundler",
+      "!!rs/commp/target",
+      "!!compare/.build",
+      "!!compare/results"
     ]
   },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "preset": "recommended"
+  "overrides": [
+    {
+      "includes": ["**/scripts/**", "**/bench.js", "compare/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
     }
-  },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "single",
-      "semicolons": "asNeeded"
-    }
-  }
+  ]
 }

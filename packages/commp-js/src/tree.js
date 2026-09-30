@@ -81,7 +81,7 @@ export class Stack {
         nodes.subarray(level * NODE_SIZE, (level + 1) * NODE_SIZE),
         carry,
         carry,
-        0,
+        0
       )
       filled[level] = 0
       level++

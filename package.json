@@ -1,40 +1,34 @@
 {
-  "name": "commp",
-  "version": "1.0.0",
+  "name": "commp-repo",
+  "private": true,
+  "version": "0.0.0",
   "type": "module",
-  "description": "Fast CommP (Filecoin Piece Commitment) implementation in Rust/WASM",
-  "main": "index.js",
-  "scripts": {
-    "build": "pnpm -r build",
-    "test": "mocha 'ts/tests/*.test.js' 'ts/*/tests/*.test.js'",
-    "bench": "node bench.js",
-    "bench:browser": "playwright-test bench.js --runner none",
-    "compare": "node compare/run.js",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write ."
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "build:wasm": "pnpm --filter @commp/wasm build:wasm",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "lint:root": "biome check package.json biome.json pnpm-workspace.yaml turbo.json .github compare",
+    "bench": "pnpm --filter bench bench",
+    "bench:browser": "pnpm --filter bench bench:browser",
+    "compare": "node compare/run.js",
+    "check": "turbo run test lint && pnpm lint:root",
+    "check:fix": "biome check --fix ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@hugomrdias/configs": "1.1.3",
+    "turbo": "2.10.13"
+  },
   "devEngines": {
     "runtime": {
       "name": "node",
       "version": "24.21.0",
       "onFail": "download"
     }
-  },
-  "engines": {
-    "node": ">=24"
-  },
-  "dependencies": {
-    "@web3-storage/data-segment": "^5.3.0",
-    "@webbuf/sha256": "^4.0.1",
-    "tinybench": "^6.2.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
-    "mocha": "^12.0.2",
-    "playwright-test": "^15.0.1"
   }
 }

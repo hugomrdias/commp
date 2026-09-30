@@ -93,7 +93,7 @@ const sizes = (/** @type {string} */ s) => s.split(',').map(parseSize)
 const config = {
   sizes: sizes(opts.sizes ?? (opts.quick ? '32MiB,256MiB' : '32MiB,1GiB')),
   memSizes: sizes(
-    opts['mem-sizes'] ?? (opts.quick ? '1MiB,256MiB' : '1MiB,1GiB'),
+    opts['mem-sizes'] ?? (opts.quick ? '1MiB,256MiB' : '1MiB,1GiB')
   ),
   chunk: parseSize(opts.chunk),
   vectorsMax: parseSize(opts['vectors-max'] ?? (opts.quick ? '8MiB' : '64MiB')),
@@ -238,7 +238,7 @@ function rustBuild(name, rustflags) {
           '--target-dir',
           target,
         ],
-        { env: { ...process.env, RUSTFLAGS: rustflags } },
+        { env: { ...process.env, RUSTFLAGS: rustflags } }
       ),
   }
 }
@@ -350,7 +350,7 @@ function tryRead(file) {
 /** Code compiled or run by the CLIs; the driver itself is left out */
 const SOURCE_PATHS = [
   'rs/commp',
-  'ts/npm-commp-wasm/src',
+  'packages/commp-wasm/src',
   'compare/go',
   'compare/rust',
   'compare/wasm.js',
@@ -371,14 +371,14 @@ function source() {
   let changes = null
   if (dirty) {
     const hash = createHash('sha256').update(
-      git('diff', 'HEAD', '--', ...SOURCE_PATHS),
+      git('diff', 'HEAD', '--', ...SOURCE_PATHS)
     )
     const untracked = git(
       'ls-files',
       '--others',
       '--exclude-standard',
       '--',
-      ...SOURCE_PATHS,
+      ...SOURCE_PATHS
     )
     for (const file of untracked.split('\n').filter(Boolean)) {
       hash.update(file).update(tryRead(path.join(ROOT, file)))
@@ -449,7 +449,7 @@ function machine() {
     const field = (/** @type {string} */ name) =>
       new RegExp(`^${name}\\s*:\\s*(.*)$`, 'm').exec(cpuinfo)?.[1] ?? ''
     const flags = new Set(
-      (field('flags') || field('Features')).split(/\s+/).filter(Boolean),
+      (field('flags') || field('Features')).split(/\s+/).filter(Boolean)
     )
     for (const f of wanted) info.features[f] = flags.has(f)
     info.virtualized = flags.has('hypervisor') || null
@@ -489,7 +489,7 @@ function machine() {
       const flags = new Set(
         `${sysctl('machdep.cpu.features')} ${sysctl('machdep.cpu.leaf7_features')}`
           .toLowerCase()
-          .split(/\s+/),
+          .split(/\s+/)
       )
       const alias = { sha_ni: 'sha', sse4_1: 'sse4.1', avx: 'avx1.0' }
       for (const f of wanted) {
@@ -544,13 +544,13 @@ function lotusVectors() {
       '{{.Dir}}',
       'github.com/filecoin-project/go-fil-commp-hashhash',
     ],
-    { cwd: path.join(DIR, 'go') },
+    { cwd: path.join(DIR, 'go') }
   ).trim()
   const cases = []
   for (const kind of ['random', 'zero', '0xCC']) {
     const text = fs.readFileSync(
       path.join(dir, 'testdata', `${kind}.txt`),
-      'utf8',
+      'utf8'
     )
     for (const line of text.trim().split('\n')) {
       const [size, padded, cid] = line.split(',')
@@ -619,7 +619,7 @@ function verify() {
     const run = cases.filter((c) => c.size <= config.vectorsMax)
     result.vectors.skipped = cases.length - run.length
     log(
-      `verify: ${run.length} of ${cases.length} Lotus vectors (up to ${formatSize(config.vectorsMax)}) on ${variants.map((v) => v.id).join(', ')}`,
+      `verify: ${run.length} of ${cases.length} Lotus vectors (up to ${formatSize(config.vectorsMax)}) on ${variants.map((v) => v.id).join(', ')}`
     )
     const payload = path.join(tmp, 'payload')
     for (const c of run) {
@@ -647,7 +647,7 @@ function verify() {
     // Sweep: all implementations agree, payloads streamed as frames
     const list = sweepSizes()
     log(
-      `verify: sweep of ${list.length} payloads, 65 B to ${formatSize(config.sweepMax)}`,
+      `verify: sweep of ${list.length} payloads, 65 B to ${formatSize(config.sweepMax)}`
     )
     const framesFile = path.join(tmp, 'frames')
     const fd = fs.openSync(framesFile, 'w')
@@ -721,7 +721,7 @@ function benchOne(v, size, iters, buf) {
       String(iters),
       String(buf),
       String(config.chunk),
-    ]),
+    ])
   )
   /** @type {BenchRun[]} */
   const runs = out.runs
@@ -758,7 +758,7 @@ function bench() {
       results.push(r)
     }
     const roots = new Set(
-      results.filter((r) => r.size === size).map((r) => r.root),
+      results.filter((r) => r.size === size).map((r) => r.root)
     )
     if (roots.size > 1)
       log(`bench: WARNING roots differ at ${formatSize(size)}`)
@@ -826,7 +826,7 @@ function markdown(r) {
           'Toolchains',
           `${m.toolchains.go}, ${m.toolchains.rustc}, node ${m.toolchains.node}`,
         ],
-      ],
+      ]
     ),
   ]
   if (r.verify) {
@@ -839,8 +839,8 @@ function markdown(r) {
       `- Sweep up to ${formatSize(v.sweep.max)}: ${v.sweep.checked} payloads, ${v.sweep.failures.length} disagreements`,
       `- Variants: ${v.variants.join(', ')}`,
       ...[...v.vectors.failures, ...v.sweep.failures].map(
-        (f) => `  - FAIL ${f}`,
-      ),
+        (f) => `  - FAIL ${f}`
+      )
     )
   }
   if (r.bench?.length) {
@@ -865,7 +865,7 @@ function markdown(r) {
         ids.map((id) => {
           const of = (/** @type {number} */ s) =>
             r.bench.find(
-              (/** @type {any} */ b) => b.variant === id && b.size === s,
+              (/** @type {any} */ b) => b.variant === id && b.size === s
             )
           return [
             `\`${id}\``,
@@ -873,8 +873,8 @@ function markdown(r) {
             ...benchSizes.map((s) => of(s)?.mibps.toFixed(1) ?? ''),
             of(largest)?.cores.toFixed(2) ?? '',
           ]
-        }),
-      ),
+        })
+      )
     )
   }
   if (r.memory?.length) {
@@ -900,8 +900,8 @@ function markdown(r) {
           formatSize(b.rssPeak - b.rssBase),
           b.allocBytes == null ? 'n/a' : formatSize(b.allocBytes),
           b.allocs ?? 'n/a',
-        ]),
-      ),
+        ])
+      )
     )
   }
   return `${lines.join('\n')}\n`
@@ -917,7 +917,7 @@ function report() {
       // Re-render, so report format changes apply to existing results
       fs.writeFileSync(
         path.join(opts.out, f.replace(/\.json$/, '.md')),
-        markdown(r),
+        markdown(r)
       )
       return r
     })
@@ -929,16 +929,16 @@ function report() {
   const ids = [
     ...new Set(
       files.flatMap((r) =>
-        (r.bench ?? []).map((/** @type {any} */ b) => b.variant),
-      ),
+        (r.bench ?? []).map((/** @type {any} */ b) => b.variant)
+      )
     ),
   ]
   const byId = (/** @type {any} */ r, /** @type {string} */ id) => {
     const rows = (r.bench ?? []).filter(
-      (/** @type {any} */ b) => b.variant === id,
+      (/** @type {any} */ b) => b.variant === id
     )
     return rows.sort(
-      (/** @type {any} */ a, /** @type {any} */ b) => b.size - a.size,
+      (/** @type {any} */ a, /** @type {any} */ b) => b.size - a.size
     )[0]
   }
   const text = [
@@ -964,14 +964,14 @@ function report() {
           sha == null ? '?' : sha ? 'yes' : 'no',
           formatSource(r.source),
           formatSize(
-            Math.max(...(r.bench ?? []).map((/** @type {any} */ b) => b.size)),
+            Math.max(...(r.bench ?? []).map((/** @type {any} */ b) => b.size))
           ),
           ...ids.map((id) => {
             const b = byId(r, id)
             return b ? `${b.mibps.toFixed(0)} (${b.cores.toFixed(1)}c)` : ''
           }),
         ]
-      }),
+      })
     ),
     '',
   ].join('\n')
@@ -999,7 +999,7 @@ function save(/** @type {any} */ update) {
     result = {
       ...old,
       ...Object.fromEntries(
-        Object.entries(update).filter(([, v]) => v !== undefined),
+        Object.entries(update).filter(([, v]) => v !== undefined)
       ),
     }
   } else if (old) {

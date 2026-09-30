@@ -7,9 +7,9 @@
 
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { create } from '../ts/npm-commp-wasm/src/index.js'
+import { create } from '../packages/commp-wasm/src/index.js'
 
-const pkg = new URL('../ts/npm-commp-wasm/', import.meta.url)
+const pkg = new URL('../packages/commp-wasm/', import.meta.url)
 
 /** Stdin is fed to the hasher in this cycle of sizes to exercise partial quads */
 const READ_SIZES = [1, 31, 127, 128, 1000, 4096, 65536, 1 << 20]
@@ -26,7 +26,7 @@ function info() {
     arch: process.arch,
     deps: {
       '@commp/wasm': JSON.parse(
-        readFileSync(new URL('package.json', pkg), 'utf8'),
+        readFileSync(new URL('package.json', pkg), 'utf8')
       ).version,
       // The package version rarely changes; this pins the exact binary
       'inline wasm sha256': createHash('sha256')
