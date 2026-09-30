@@ -8,10 +8,6 @@ license = "MIT OR Apache-2.0"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[[bin]]
-name = "bench"
-path = "src/bench.rs"
-
 [dependencies]
 # no_std on wasm32 (see lib.rs), so panics and allocation failures trap
 # instead of pulling in std's formatting and dlmalloc
