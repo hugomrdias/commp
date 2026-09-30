@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.0...commp-wasm-v0.1.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **commp-wasm:** regenerate inline wasm ([85f0e1d](https://github.com/hugomrdias/commp/commit/85f0e1d16d2488b214f5e509703b7c87160e405a))
+
 ## 0.1.0 (2026-09-30)
 
 
