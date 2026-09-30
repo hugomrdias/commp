@@ -15,6 +15,12 @@ import { decode as varintDecode } from './varint.js'
 
 /** @import { PieceDigest, StreamingHasher } from './types.js' */
 
+/**
+ * Largest slice passed to WASM per call. wasm-bindgen copies each input into
+ * WASM memory, which never shrinks, so large inputs are fed in chunks.
+ */
+const CHUNK_SIZE = 1 << 20
+
 /** Multihash code for fr32-sha2-256-trunc254-padded-binary-tree */
 export const code = 0x1011
 
@@ -62,9 +68,23 @@ class Hasher {
    *
    * @param {Uint8Array} bytes - Bytes to write
    * @returns {this}
+   * @throws {RangeError} If the total would exceed `MAX_PAYLOAD_SIZE`; the
+   * hasher is left unchanged
    */
   write(bytes) {
-    this.inner.write(bytes)
+    // Rust checks each chunk; check the whole write first so a rejected write
+    // never leaves earlier chunks applied
+    if (
+      bytes.length > CHUNK_SIZE &&
+      this.count() + BigInt(bytes.length) > MAX_PAYLOAD_SIZE
+    ) {
+      throw new RangeError(
+        `Writing ${bytes.length} bytes exceeds max payload size of ${MAX_PAYLOAD_SIZE}`,
+      )
+    }
+    for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
+      this.inner.write(bytes.subarray(offset, offset + CHUNK_SIZE))
+    }
     return this
   }
 
@@ -157,10 +177,11 @@ export function create() {
  */
 export function digest(payload) {
   const hasher = create()
-  hasher.write(payload)
-  const result = hasher.digest()
-  hasher.free()
-  return result
+  try {
+    return hasher.write(payload).digest()
+  } finally {
+    hasher.free()
+  }
 }
 
 /**
@@ -179,12 +200,30 @@ export function digest(payload) {
  * @returns {Uint8Array}
  */
 export function root(payload) {
-  return new Uint8Array(wasmRoot(payload))
+  if (payload.length <= CHUNK_SIZE) {
+    return wasmRoot(payload)
+  }
+  const hasher = create()
+  try {
+    hasher.write(payload)
+    return hasher.inner.root()
+  } finally {
+    hasher.free()
+  }
 }
 
 // Re-export constants
 export const NODE_SIZE = 32
 export const IN_BYTES_PER_QUAD = 127
 export const MIN_PAYLOAD_SIZE = 65
+
+/**
+ * Largest payload accepted, in bytes: 127 * 2^47 (~15.9 PiB)
+ *
+ * data-segment allows up to tree height 255, far beyond 64 bits. This is the
+ * largest payload for which every derived size (padding, piece size) stays
+ * below 2^53, so the digest fields are exact as JS numbers.
+ */
+export const MAX_PAYLOAD_SIZE = 127n << 47n
 export const HEIGHT_SIZE = 1
 export const ROOT_SIZE = 32

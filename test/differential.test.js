@@ -225,6 +225,19 @@ describe('full digest matches data-segment', function () {
     }
   })
 
+  // The wrapper feeds inputs over 1 MiB to WASM in 1 MiB chunks, which
+  // aren't a multiple of 127, so quads straddle chunks
+  it('@commp/wasm one-shot over the 1 MiB chunk size', () => {
+    const data = randomBytes(5 * (1 << 20) + 1000, 11)
+    const expected = Ref.digest(data)
+    assertPieceDigest(Wasm.digest(data), expected)
+    assert.strictEqual(toHex(Wasm.root(data)), toHex(expected.root))
+    assert.strictEqual(
+      toHex(Wasm.create().write(data).digest().bytes),
+      toHex(expected.bytes),
+    )
+  })
+
   // 33,292,289 is one byte past the point where wasm32 usize math overflowed
   it('33,292,289 bytes (past wasm32 usize overflow)', function () {
     this.timeout(120_000)
@@ -238,7 +251,58 @@ describe('full digest matches data-segment', function () {
   })
 })
 
+describe('inline wasm loader', () => {
+  const loaderUrl = new URL(
+    '../ts/npm-commp-wasm/src/inline/commp_wasm_bg.wasm.js',
+    import.meta.url,
+  )
+  const fromBase64 = Uint8Array.fromBase64
+  const NodeBuffer = globalThis.Buffer
+
+  /**
+   * Load a fresh copy of the loader and check the decoded module matches
+   *
+   * @param {string} name
+   */
+  async function load(name) {
+    const fresh = await import(`${loaderUrl}?${name}`)
+    assert.ok(fresh.wasm.memory instanceof WebAssembly.Memory)
+  }
+
+  it('decodes without Uint8Array.fromBase64 (Buffer)', async () => {
+    try {
+      delete Uint8Array.fromBase64
+      await load('buffer')
+    } finally {
+      Uint8Array.fromBase64 = fromBase64
+    }
+  })
+
+  it('decodes without fromBase64 or Buffer (atob)', async () => {
+    try {
+      delete Uint8Array.fromBase64
+      delete globalThis.Buffer
+      await load('atob')
+    } finally {
+      Uint8Array.fromBase64 = fromBase64
+      globalThis.Buffer = NodeBuffer
+    }
+  })
+})
+
 describe('wasm memory', () => {
+  it('one-shot digest and root of 64 MiB grow memory by at most a chunk', function () {
+    this.timeout(60_000)
+    const data = new Uint8Array(64 << 20).fill(3)
+    const before = wasm.memory.buffer.byteLength
+    Wasm.digest(data)
+    Wasm.root(data)
+    assert.ok(
+      wasm.memory.buffer.byteLength - before <= 2 << 20,
+      `grew by ${wasm.memory.buffer.byteLength - before} bytes`,
+    )
+  })
+
   it('stays constant while streaming 256 MiB', function () {
     this.timeout(60_000)
     const chunk = randomBytes(1 << 20, 5)
@@ -291,6 +355,40 @@ describe('stateful streaming', () => {
       })
     })
   }
+})
+
+describe('MAX_PAYLOAD_SIZE', () => {
+  it('is 127 * 2^47 in both packages', () => {
+    assert.strictEqual(JS.MAX_PAYLOAD_SIZE, 127n * 2n ** 47n)
+    assert.strictEqual(Wasm.MAX_PAYLOAD_SIZE, JS.MAX_PAYLOAD_SIZE)
+  })
+
+  it('@commp/js throws RangeError and leaves the hasher unchanged', () => {
+    const hasher = JS.create()
+    // @ts-expect-error private field, to avoid writing ~16 PiB
+    hasher.bytesWritten = JS.MAX_PAYLOAD_SIZE - 10n
+    assert.throws(() => hasher.write(new Uint8Array(11)), {
+      name: 'RangeError',
+      message: `Writing 11 bytes exceeds max payload size of ${JS.MAX_PAYLOAD_SIZE}`,
+    })
+    assert.strictEqual(hasher.count(), JS.MAX_PAYLOAD_SIZE - 10n)
+    hasher.write(new Uint8Array(10))
+    assert.strictEqual(hasher.count(), JS.MAX_PAYLOAD_SIZE)
+    assert.throws(() => hasher.write(new Uint8Array(1)), RangeError)
+    hasher.write(new Uint8Array(0))
+  })
+
+  it('@commp/wasm rejects a multi-chunk write before writing any chunk', () => {
+    const hasher = Wasm.create()
+    hasher.count = () => Wasm.MAX_PAYLOAD_SIZE - 10n
+    assert.throws(() => hasher.write(new Uint8Array(3 << 20)), {
+      name: 'RangeError',
+      message: `Writing ${3 << 20} bytes exceeds max payload size of ${Wasm.MAX_PAYLOAD_SIZE}`,
+    })
+    // @ts-expect-error private field
+    assert.strictEqual(hasher.inner.count(), 0n)
+    hasher.free()
+  })
 })
 
 describe('vectors.csv sizes', () => {

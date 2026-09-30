@@ -42,15 +42,20 @@ import * as commp_wasm_bg from './commp_wasm_bg.js';
 
 const wasmBase64 = "${wasmBase64}";
 
-// Decode base64 to Uint8Array
+// Decode base64 to Uint8Array, fastest available method first
 function base64ToBytes(base64) {
-  if (typeof atob === 'function') {
-    // Browser / Deno
-    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  } else {
-    // Node.js
-    return new Uint8Array(Buffer.from(base64, 'base64'));
+  if (typeof Uint8Array.fromBase64 === 'function') {
+    return Uint8Array.fromBase64(base64);
   }
+  if (typeof globalThis.Buffer === 'function') {
+    return globalThis.Buffer.from(base64, 'base64');
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 const wasmBinary = base64ToBytes(wasmBase64);

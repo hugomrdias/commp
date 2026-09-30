@@ -179,16 +179,20 @@ Creates a streaming hasher for processing data in chunks.
 
 #### Hasher methods
 
-- `write(data: Uint8Array): this` - Write data chunk
+- `write(data: Uint8Array): this` - Write data chunk. Throws a `RangeError`, leaving the hasher unchanged, if the total would exceed `MAX_PAYLOAD_SIZE`
 - `digest(): PieceDigest` - Get full digest result
 - `count(): bigint` - Get bytes written
 - `reset(): this` - Reset hasher state
 - `free(): void` - Free WASM memory (call when done)
 
+### `MAX_PAYLOAD_SIZE: bigint`
+
+Largest payload accepted: `127n * 2n ** 47n` bytes (~15.9 PiB). It is the largest size for which every digest field stays exact as a JS number. data-segment allows up to tree height 255, which no real payload approaches.
+
 ## Testing
 
 ```bash
-# Run all tests (562 test cases)
+# Run all tests
 pnpm test
 
 # Run benchmarks

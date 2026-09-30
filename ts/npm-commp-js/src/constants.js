@@ -47,6 +47,16 @@ export const MIN_PAYLOAD_SIZE = 2 * NODE_SIZE + 1
  */
 export const MULTIHASH_CODE = /** @type {0x1011} */ (0x1011)
 
+/**
+ * Largest payload accepted, in bytes: 127 * 2^47 (~15.9 PiB)
+ *
+ * data-segment allows up to tree height 255, far beyond 64 bits. This is the
+ * largest payload for which every derived size (padding, piece size) stays
+ * below 2^53, so the digest fields are exact as JS numbers. Matches
+ * `@commp/wasm`.
+ */
+export const MAX_PAYLOAD_SIZE = BigInt(IN_BYTES_PER_QUAD) << 47n
+
 /** Maximum tree height (fits in one byte) */
 export const MAX_HEIGHT = 255
 
