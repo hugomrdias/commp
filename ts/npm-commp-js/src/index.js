@@ -17,16 +17,36 @@ import {
   HEIGHT_SIZE,
   IN_BYTES_PER_QUAD,
   MULTIHASH_CODE,
+  NODE_SIZE,
   ROOT_SIZE,
 } from './constants.js'
-import { readQuadToNodes, toPadding } from './fr32.js'
-import { build, createLayer, getHeight, getRoot, prune } from './tree.js'
+import { readQuad, toPadding } from './fr32.js'
+import { Stack } from './tree.js'
 import {
   encodeTo as varintEncodeTo,
   encodingLength as varintEncodingLength,
 } from './varint.js'
 
-/** @import { StreamingHasher, PieceDigest, TreeLayer } from './types.js' */
+/** @import { StreamingHasher, PieceDigest } from './types.js' */
+
+/**
+ * Scratch space for the 2 leaves of one quad
+ * @type {Uint8Array}
+ */
+const LEAVES = new Uint8Array(2 * NODE_SIZE)
+
+/**
+ * Hash a quad into 2 leaves and push them onto the stack
+ *
+ * @param {Uint8Array} source
+ * @param {number} offset
+ * @param {Stack} stack
+ */
+function pushQuad(source, offset, stack) {
+  readQuad(source, offset, LEAVES, 0)
+  stack.push(LEAVES.subarray(0, NODE_SIZE))
+  stack.push(LEAVES.subarray(NODE_SIZE))
+}
 
 export { MULTIHASH_CODE as code }
 export const name = /** @type {const} */ (
@@ -78,11 +98,11 @@ class Hasher {
     this.offset = 0
 
     /**
-     * Tree layers - layer 0 contains leaves, higher layers contain internal nodes
+     * Pending tree nodes, one per level (O(log n) memory)
      * @private
-     * @type {TreeLayer[]}
+     * @type {Stack}
      */
-    this.layers = [createLayer()]
+    this.stack = new Stack()
   }
 
   /**
@@ -101,8 +121,7 @@ class Hasher {
    * @returns {this}
    */
   write(bytes) {
-    const { buffer, layers } = this
-    const leaves = layers[0]
+    const { buffer, stack } = this
     const length = bytes.length
 
     if (length === 0) {
@@ -120,16 +139,12 @@ class Hasher {
     // Fill the buffer to complete a quad
     const bytesRequired = IN_BYTES_PER_QUAD - this.offset
     buffer.set(bytes.subarray(0, bytesRequired), this.offset)
-
-    // Process the full quad - this creates 2 leaves
-    readQuadToNodes(buffer, 0, leaves.nodes, leaves.count)
-    leaves.count += 2
+    pushQuad(buffer, 0, stack)
 
     // Process remaining full quads directly from input
     let readOffset = bytesRequired
     while (readOffset + IN_BYTES_PER_QUAD <= length) {
-      readQuadToNodes(bytes, readOffset, leaves.nodes, leaves.count)
-      leaves.count += 2
+      pushQuad(bytes, readOffset, stack)
       readOffset += IN_BYTES_PER_QUAD
     }
 
@@ -141,9 +156,6 @@ class Hasher {
     this.offset = remaining
     this.bytesWritten += BigInt(length)
 
-    // Prune the tree to keep memory usage low
-    prune(layers)
-
     return this
   }
 
@@ -153,30 +165,19 @@ class Hasher {
    * @returns {PieceDigest}
    */
   digest() {
-    const { buffer, layers, offset, bytesWritten } = this
+    const { buffer, offset, bytesWritten } = this
 
-    // Clone layers for building
-    /** @type {TreeLayer[]} */
-    let buildLayers = layers.map((layer) => ({
-      nodes: [...layer.nodes],
-      count: layer.count,
-    }))
-
-    const leaves = buildLayers[0]
-
-    // If we have buffered bytes or no data written, process final quad
+    // Hash the buffered partial quad (or an all-zero quad for empty input)
+    // on a copy of the stack
+    let stack = this.stack
     if (offset > 0 || bytesWritten === 0n) {
-      // Fill rest of buffer with zeros
-      buffer.fill(0, offset)
-      readQuadToNodes(buffer, 0, leaves.nodes, leaves.count)
-      leaves.count += 2
+      stack = stack.clone()
+      const tail = new Uint8Array(IN_BYTES_PER_QUAD)
+      tail.set(buffer.subarray(0, offset))
+      pushQuad(tail, 0, stack)
     }
 
-    // Build the complete tree
-    buildLayers = build(buildLayers)
-
-    const height = getHeight(buildLayers)
-    const root = getRoot(buildLayers)
+    const { height, root } = stack.fold()
     const padding = toPadding(bytesWritten)
 
     // Calculate multihash size
@@ -227,7 +228,7 @@ class Hasher {
   reset() {
     this.offset = 0
     this.bytesWritten = 0n
-    this.layers = [createLayer()]
+    this.stack.clear()
     return this
   }
 

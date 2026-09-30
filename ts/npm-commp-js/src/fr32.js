@@ -13,7 +13,7 @@ import {
   NODE_SIZE,
   OUT_BYTES_PER_QUAD,
 } from './constants.js'
-import { truncatedHash } from './hash.js'
+import { truncatedHashInto } from './hash.js'
 
 /**
  * Reusable buffer for FR32 padded output (128 bytes)
@@ -60,8 +60,8 @@ export function fr32PadInto(source, offset, output) {
 }
 
 /**
- * Reads a 127-byte quad, FR32 pads it, and immediately hashes to produce 2 leaf nodes.
- * This fused operation avoids intermediate allocations.
+ * Reads a 127-byte quad, FR32 pads it, and hashes each 64-byte half into a
+ * leaf, without allocating
  *
  * @example
  * ```ts twoslash
@@ -75,40 +75,17 @@ export function fr32PadInto(source, offset, output) {
  *
  * @param {Uint8Array} source - Source data containing the quad
  * @param {number} sourceOffset - Offset into source where quad starts
- * @param {Uint8Array} leaves - Output buffer for leaf nodes (flat array of 32-byte nodes)
+ * @param {Uint8Array} leaves - Output buffer for the 2 leaf nodes
  * @param {number} leafOffset - Byte offset into leaves buffer where to write
  */
 export function readQuad(source, sourceOffset, leaves, leafOffset) {
-  // FR32 pad into reusable buffer
   fr32PadInto(source, sourceOffset, FR32_BUFFER)
-
-  // Hash first 64 bytes → leaf 1
-  const leaf1 = truncatedHash(FR32_BUFFER.subarray(0, 64))
-  leaves.set(leaf1, leafOffset)
-
-  // Hash last 64 bytes → leaf 2
-  const leaf2 = truncatedHash(FR32_BUFFER.subarray(64, 128))
-  leaves.set(leaf2, leafOffset + NODE_SIZE)
-}
-
-/**
- * Reads a 127-byte quad from a buffer, FR32 pads it, and hashes to produce 2 leaf nodes.
- * Version that writes directly into a nodes array at specific indices.
- *
- * @param {Uint8Array} source - Source data containing the quad
- * @param {number} sourceOffset - Offset into source where quad starts
- * @param {Uint8Array[]} nodes - Array of 32-byte node buffers
- * @param {number} nodeIndex - Starting index in nodes array
- */
-export function readQuadToNodes(source, sourceOffset, nodes, nodeIndex) {
-  // FR32 pad into reusable buffer
-  fr32PadInto(source, sourceOffset, FR32_BUFFER)
-
-  // Hash first 64 bytes → leaf 1
-  nodes[nodeIndex] = truncatedHash(FR32_BUFFER.subarray(0, 64))
-
-  // Hash last 64 bytes → leaf 2
-  nodes[nodeIndex + 1] = truncatedHash(FR32_BUFFER.subarray(64, 128))
+  truncatedHashInto(FR32_BUFFER.subarray(0, 64), leaves, leafOffset)
+  truncatedHashInto(
+    FR32_BUFFER.subarray(64, 128),
+    leaves,
+    leafOffset + NODE_SIZE,
+  )
 }
 
 /**
