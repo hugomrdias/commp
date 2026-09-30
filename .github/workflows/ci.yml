@@ -26,7 +26,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rs/commp
-      - run: cargo test --lib
+      - run: cargo test --lib --tests
       - run: cargo build --lib --release --target wasm32-unknown-unknown
 
   js:
