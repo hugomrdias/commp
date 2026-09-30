@@ -129,11 +129,36 @@ const VARIANTS = [
     memory: true,
   },
   {
+    id: 'rust-par',
+    desc: 'Rust native with the parallel feature (all cores)',
+    impl: 'rust',
+    bin: 'rust-par',
+    memory: true,
+  },
+  {
     id: 'rust-soft',
-    desc: 'Rust native, sha2 forced to its portable backend',
+    desc: 'Rust native, SHA extensions off (SIMD lanes only)',
     impl: 'rust',
     bin: 'rust-soft',
   },
+  {
+    id: 'rust-portable',
+    desc: 'Rust native, sha2 one message at a time (the pre-SIMD baseline)',
+    impl: 'rust',
+    bin: 'rust-portable',
+    optIn: true,
+  },
+  ...(goArch === 'amd64'
+    ? ['avx512', 'avx2', 'sse2'].map(
+        (backend) =>
+          /** @type {Variant} */ ({
+            id: `rust-${backend}`,
+            desc: `Rust native, ${backend} backend forced (skipped if the CPU lacks it)`,
+            impl: 'rust',
+            bin: `rust-${backend}`,
+          })
+      )
+    : []),
   {
     id: 'rust-native',
     desc: 'Rust native, -C target-cpu=native',
@@ -196,7 +221,7 @@ const VARIANTS = [
   },
 ]
 
-const selected = opts.variants
+let selected = opts.variants
   ? opts.variants.split(',').map((id) => {
       const v = VARIANTS.find((v) => v.id === id)
       if (!v) throw new Error(`unknown variant ${id}`)
@@ -207,8 +232,16 @@ const selected = opts.variants
 /** @type {Record<string, {cmd: string, args: string[], build?: () => void}>} */
 const builds = {
   rust: rustBuild('rust', ''),
+  'rust-par': rustBuild('rust-par', '', ['parallel']),
   'rust-soft': rustBuild('rust-soft', '--cfg sha2_backend="soft"'),
   'rust-native': rustBuild('rust-native', '-C target-cpu=native'),
+  'rust-portable': rustBuild('rust-portable', '--cfg commp_backend="portable"'),
+  ...Object.fromEntries(
+    ['avx512', 'avx2', 'sse2'].map((b) => [
+      `rust-${b}`,
+      rustBuild(`rust-${b}`, `--cfg commp_backend="${b}"`),
+    ])
+  ),
   go: goBuild('go', []),
   'go-stdlib': goBuild('go-stdlib', [
     '-modfile=go.stdlib.mod',
@@ -220,8 +253,9 @@ const builds = {
 /**
  * @param {string} name
  * @param {string} rustflags
+ * @param {string[]} [features] compare/rust features
  */
-function rustBuild(name, rustflags) {
+function rustBuild(name, rustflags, features = []) {
   const target = path.join(BUILD, name)
   return {
     cmd: path.join(target, 'release', 'commp-rust'),
@@ -237,6 +271,7 @@ function rustBuild(name, rustflags) {
           path.join(DIR, 'rust', 'Cargo.toml'),
           '--target-dir',
           target,
+          ...(features.length ? ['--features', features.join(',')] : []),
         ],
         { env: { ...process.env, RUSTFLAGS: rustflags } }
       ),
@@ -317,6 +352,15 @@ function build() {
     log(`building ${name}`)
     builds[name].build?.()
   }
+  // A forced Rust backend the CPU lacks falls back to another one, which
+  // would only repeat a row
+  selected = selected.filter((v) => {
+    if (v.impl !== 'rust') return true
+    const { backend } = JSON.parse(exec(v, ['info']))
+    if (!backend.includes('unavailable')) return true
+    log(`skipping ${v.id}: ${backend}`)
+    return false
+  })
 }
 
 /* ------------------------------------------------------------------------ */

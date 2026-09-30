@@ -18,9 +18,18 @@ wasm-bindgen = { version = "0.2", default-features = false }
 # `simd` module.
 sha2 = { version = "0.11", default-features = false }
 
+# Behind the `parallel` feature: hashes large writes on all cores
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = { version = "1.10", optional = true }
+
 # Smaller than std's dlmalloc; realloc-in-place is unused and costs size
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 talc = { version = "5.1.1", features = ["disable-realloc-in-place"] }
+
+[features]
+# Native only: a `write()` of at least 64 KiB hashes its full batches on
+# rayon's global thread pool. No effect on wasm32.
+parallel = ["dep:rayon"]
 
 [profile.release]
 # Maximum optimization level
@@ -42,3 +51,12 @@ opt-level = 3
 # Maximum wasm-opt optimization with bulk memory and SIMD
 # --strip-producers drops toolchain metadata so builds are reproducible across machines
 wasm-opt = ["-O4", "--enable-bulk-memory", "--enable-simd", "--strip-producers"]
+
+[lints.rust]
+# For benchmarks (compare/): `--cfg sha2_backend="soft"` (sha2's own switch)
+# also turns off our SHA-256 instructions; `--cfg commp_backend="avx2"` etc.
+# picks one backend when the CPU supports it
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(sha2_backend, values("soft"))',
+    'cfg(commp_backend, values("arm-sha2", "sha-ni", "avx512", "avx2", "sse2", "neon", "portable"))',
+] }
