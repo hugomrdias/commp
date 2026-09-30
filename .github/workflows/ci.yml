@@ -33,12 +33,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      # Installs pnpm (packageManager) and Node (devEngines.runtime) from
+      # package.json, then runs `pnpm install --frozen-lockfile`
+      - uses: pnpm/setup@v3
         with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache: true
+          require-lockfile: true
       - run: pnpm lint
 
       # Rebuild the inline WASM and fail if it differs from the committed copy
