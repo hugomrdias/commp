@@ -36,6 +36,7 @@ jobs:
         with:
           workspaces: rs/commp
       - run: cargo test --lib --tests
+      - run: cargo test --lib --tests --features parallel
       - run: cargo build --lib --release --target wasm32-unknown-unknown
 
   check:

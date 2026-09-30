@@ -69,8 +69,11 @@ Useful options: `--variants rust,go`, `--sizes 32MiB,4GiB`, `--iters 5`,
 
 | Variant | What runs | SHA-256 |
 | --- | --- | --- |
-| `rust` | `rs/commp` native, one thread | sha2 crate: SHA-NI / ARMv8 SHA2 if the CPU has them, else portable |
-| `rust-soft` | same, built with `--cfg sha2_backend="soft"` | portable only |
+| `rust` | `rs/commp` native, one thread | ARMv8 SHA2 (4 messages interleaved) / SHA-NI (2 interleaved) if the CPU has them, else SIMD with one message per lane: NEON (8), AVX-512 (16), AVX2 (8) or SSE2 (8) |
+| `rust-par` | same, with the `parallel` feature: large writes hashed on all cores | as `rust` |
+| `rust-soft` | same as `rust`, built with `--cfg sha2_backend="soft"` | SHA extensions off: NEON / AVX-512 / AVX2 / SSE2, one message per lane |
+| `rust-avx512`, `rust-avx2`, `rust-sse2` (amd64 only) | same as `rust`, built with `--cfg commp_backend="avx2"` etc.; skipped when the CPU lacks the feature | that backend |
+| `rust-portable` (opt-in) | same as `rust`, built with `--cfg commp_backend="portable"` | sha2 crate, one message at a time |
 | `rust-native` (opt-in) | same, built with `-C target-cpu=native` | as `rust` |
 | `go` | go-fil-commp-hashhash as released | sha256-simd: SHA-NI / ARMv8 SHA2, else hands off to `crypto/sha256` |
 | `go-1core` | same, `GOMAXPROCS=1` | as `go` |

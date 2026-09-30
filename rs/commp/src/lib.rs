@@ -2,6 +2,9 @@
 //!
 //! Optimized for maximum throughput with:
 //! - 4-lane SIMD SHA-256 on wasm32 (4 independent 64-byte messages per `v128`)
+//! - Native: ARMv8 SHA2 / x86 SHA-NI instructions on several messages at once,
+//!   else NEON / AVX-512 / AVX2 / SSE2 with one message per lane, and with the
+//!   `parallel` feature, large writes hashed on all cores
 //! - Leaves and subtrees hashed in fixed-size batches
 //! - O(log n) streaming memory
 //! - Integer-only size calculations
@@ -101,6 +104,19 @@ const BATCH_LEAVES: usize = BATCH_QUADS * 2;
 /// Stack slot of a full batch's subtree root (`BATCH_LEAVES = 2^BATCH_LEVEL`)
 const BATCH_LEVEL: usize = BATCH_LEAVES.trailing_zeros() as usize;
 
+/// Payload bytes in a full batch
+#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+const BATCH_BYTES: usize = BATCH_QUADS * IN_BYTES_PER_QUAD;
+
+/// Smallest run of full batches in one `write()` worth spreading over threads
+#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+const PARALLEL_MIN_BATCHES: usize = 4;
+
+/// Most batches hashed in parallel at once (~4 MiB of payload), so the roots
+/// waiting to be folded in order take a fixed 8 KiB whatever the write size
+#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+const PARALLEL_GROUP: usize = 256;
+
 /// Pre-computed zero commitment nodes for each level (lazily initialized)
 fn get_zero_comm(level: usize) -> [u8; NODE_SIZE] {
     #[cfg(not(target_arch = "wasm32"))]
@@ -143,6 +159,42 @@ const IV: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
+/// SHA-256 round constants
+#[allow(dead_code)] // where only the portable code runs
+const K: [u32; 64] = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+];
+
+/// `K[i] + W[i]` for the padding block of a 64-byte message, which is
+/// always the same: `0x80`, zeros, then the bit length 512
+#[allow(dead_code)] // where only the portable code runs
+const PAD_KW: [u32; 64] = {
+    let mut w = [0u32; 64];
+    w[0] = 0x8000_0000;
+    w[15] = 512;
+    let mut i = 16;
+    while i < 64 {
+        let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+        let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+        w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
+        i += 1;
+    }
+    let mut kw = [0u32; 64];
+    let mut i = 0;
+    while i < 64 {
+        kw[i] = K[i].wrapping_add(w[i]);
+        i += 1;
+    }
+    kw
+};
+
 /// Padding block of a 64-byte message: `0x80`, zeros, then the bit length 512
 const PAD_BLOCK: [u8; 64] = {
     let mut block = [0u8; 64];
@@ -167,11 +219,839 @@ fn truncated_hash_64(data: &[u8; 64]) -> [u8; NODE_SIZE] {
     result
 }
 
-/// Hash many 64-byte messages into truncated nodes (portable fallback)
-#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+/// SHA-256 code for leaves and nodes on native targets
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)] // each target uses some of these
+enum Backend {
+    /// ARMv8 SHA2 instructions (`arm`)
+    ArmSha2,
+    /// x86 SHA extensions (`x86`)
+    ShaNi,
+    /// One message per `u32` lane of a SIMD register (`lanes`)
+    Avx512,
+    Avx2,
+    Sse2,
+    Neon,
+    /// sha2, one message at a time
+    Portable,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Backend {
+    /// Fastest first. SHA-NI stays ahead of AVX-512 until measured otherwise
+    /// on a CPU that has both.
+    const PREFERENCE: [Backend; 7] = [
+        Backend::ArmSha2,
+        Backend::ShaNi,
+        Backend::Avx512,
+        Backend::Avx2,
+        Backend::Sse2,
+        Backend::Neon,
+        Backend::Portable,
+    ];
+
+    /// Set with `--cfg commp_backend="..."`, to benchmark one backend on a
+    /// CPU that has faster ones
+    const FORCED: Option<Backend> = if cfg!(commp_backend = "arm-sha2") {
+        Some(Backend::ArmSha2)
+    } else if cfg!(commp_backend = "sha-ni") {
+        Some(Backend::ShaNi)
+    } else if cfg!(commp_backend = "avx512") {
+        Some(Backend::Avx512)
+    } else if cfg!(commp_backend = "avx2") {
+        Some(Backend::Avx2)
+    } else if cfg!(commp_backend = "sse2") {
+        Some(Backend::Sse2)
+    } else if cfg!(commp_backend = "neon") {
+        Some(Backend::Neon)
+    } else if cfg!(commp_backend = "portable") {
+        Some(Backend::Portable)
+    } else {
+        None
+    };
+
+    /// Whether this build and CPU can run the backend. `--cfg
+    /// sha2_backend="soft"` (sha2's own switch) rules out the SHA-256
+    /// instructions, to measure the rest.
+    fn supported(self) -> bool {
+        let sha = !cfg!(sha2_backend = "soft");
+        match self {
+            #[cfg(target_arch = "aarch64")]
+            Backend::ArmSha2 => sha && std::arch::is_aarch64_feature_detected!("sha2"),
+            // Part of every aarch64 target
+            #[cfg(target_arch = "aarch64")]
+            Backend::Neon => true,
+            #[cfg(target_arch = "x86_64")]
+            Backend::ShaNi => {
+                sha && std::arch::is_x86_feature_detected!("sha")
+                    && std::arch::is_x86_feature_detected!("ssse3")
+                    && std::arch::is_x86_feature_detected!("sse4.1")
+            }
+            #[cfg(target_arch = "x86_64")]
+            Backend::Avx512 => std::arch::is_x86_feature_detected!("avx512f"),
+            #[cfg(target_arch = "x86_64")]
+            Backend::Avx2 => std::arch::is_x86_feature_detected!("avx2"),
+            // Part of every x86_64 target
+            #[cfg(target_arch = "x86_64")]
+            Backend::Sse2 => true,
+            Backend::Portable => true,
+            #[allow(unreachable_patterns)]
+            _ => false,
+        }
+    }
+
+    /// The forced backend if supported, else the fastest supported one
+    #[inline]
+    fn get() -> Backend {
+        match Backend::FORCED {
+            Some(forced) if forced.supported() => forced,
+            _ => Backend::PREFERENCE.into_iter().find(|b| b.supported()).unwrap_or(Backend::Portable),
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Backend::ArmSha2 => "ARMv8 SHA2, 4 messages interleaved",
+            Backend::ShaNi => "SHA-NI, 2 messages interleaved",
+            Backend::Avx512 => "AVX-512, 16 messages per SHA-256",
+            Backend::Avx2 => "AVX2, 8 messages per SHA-256",
+            Backend::Sse2 => "SSE2, 8 messages per SHA-256 (2 vectors)",
+            Backend::Neon => "NEON, 8 messages per SHA-256 (2 vectors)",
+            Backend::Portable => "sha2 portable",
+        }
+    }
+}
+
+/// Hash many 64-byte messages into truncated nodes
+#[cfg(not(target_arch = "wasm32"))]
 fn hash_many(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+    // SAFETY: `Backend::get()` only picks what the CPU supports
+    unsafe {
+        match Backend::get() {
+            #[cfg(target_arch = "aarch64")]
+            Backend::ArmSha2 => arm::hash_many(msgs, out),
+            #[cfg(target_arch = "aarch64")]
+            Backend::Neon => lanes::hash_many_neon(msgs, out),
+            #[cfg(target_arch = "x86_64")]
+            Backend::ShaNi => x86::hash_many(msgs, out),
+            #[cfg(target_arch = "x86_64")]
+            Backend::Avx512 => lanes::hash_many_avx512(msgs, out),
+            #[cfg(target_arch = "x86_64")]
+            Backend::Avx2 => lanes::hash_many_avx2(msgs, out),
+            #[cfg(target_arch = "x86_64")]
+            Backend::Sse2 => lanes::hash_many_sse2(msgs, out),
+            _ => hash_many_portable(msgs, out),
+        }
+    }
+}
+
+/// Which SHA-256 code hashes leaves and nodes on this CPU, for benchmarks.
+/// Says so when `commp_backend` forced it, or forced one the CPU lacks.
+#[doc(hidden)]
+#[cfg(not(target_arch = "wasm32"))]
+pub fn sha256_backend() -> String {
+    let backend = Backend::get();
+    let mut name = String::from(backend.name());
+    match Backend::FORCED {
+        Some(forced) if forced == backend => name.push_str(", forced"),
+        Some(forced) => {
+            name.push_str(", forced ");
+            name.push_str(forced.name().split(',').next().unwrap_or_default());
+            name.push_str(" unavailable");
+        }
+        None => {}
+    }
+    name
+}
+
+/// Hash many 64-byte messages into truncated nodes, one at a time
+#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+fn hash_many_portable(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
     for (msg, node) in msgs.iter().zip(out.iter_mut()) {
         *node = truncated_hash_64(msg);
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", not(target_feature = "simd128")))]
+use hash_many_portable as hash_many;
+
+/// Multi-message SHA-256 with the ARMv8 SHA2 instructions
+///
+/// sha2 hashes one message at a time, so each round waits on the previous
+/// one's `sha256h`/`sha256h2`. Every leaf and every node on a tree level is
+/// independent, so here `LANES` messages are hashed in step to keep the SHA
+/// unit busy, and the constant padding block skips its message schedule.
+#[cfg(target_arch = "aarch64")]
+mod arm {
+    use super::{IV, K, NODE_SIZE, PAD_KW};
+    use core::arch::aarch64::*;
+
+    /// Messages hashed in step
+    const LANES: usize = 4;
+
+    /// 64 rounds on each lane's `(abcd, efgh)` state, taking `K[i] + W[i]`
+    /// four at a time from `kw(group, lane)`, after which `update(group,
+    /// lane)` may extend that lane's message schedule
+    macro_rules! rounds {
+        ($abcd:ident, $efgh:ident, $n:expr, |$g:ident, $l:ident| $kw:expr, $update:expr) => {
+            for $g in 0..16 {
+                for $l in 0..$n {
+                    let kw = $kw;
+                    let abcd = $abcd[$l];
+                    $abcd[$l] = vsha256hq_u32(abcd, $efgh[$l], kw);
+                    $efgh[$l] = vsha256h2q_u32($efgh[$l], abcd, kw);
+                    $update;
+                }
+            }
+        };
+    }
+
+    /// Hash `N` independent 64-byte messages into truncated nodes
+    #[inline(always)]
+    unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        let iv = [vld1q_u32(IV.as_ptr()), vld1q_u32(IV.as_ptr().add(4))];
+        // w[lane][j] holds schedule words 4j..4j+4, overwritten in place by
+        // the words 16 later
+        let mut w: [[uint32x4_t; 4]; N] = core::array::from_fn(|l| {
+            core::array::from_fn(|j| vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(msgs[l].as_ptr().add(16 * j)))))
+        });
+        let mut abcd = [iv[0]; N];
+        let mut efgh = [iv[1]; N];
+        rounds!(abcd, efgh, N, |g, l| vaddq_u32(w[l][g % 4], vld1q_u32(K.as_ptr().add(4 * g))), {
+            if g < 12 {
+                let next = vsha256su0q_u32(w[l][g % 4], w[l][(g + 1) % 4]);
+                w[l][g % 4] = vsha256su1q_u32(next, w[l][(g + 2) % 4], w[l][(g + 3) % 4]);
+            }
+        });
+
+        // Second block: the padding, whose K + W is precomputed
+        let mid: [[uint32x4_t; 2]; N] =
+            core::array::from_fn(|l| [vaddq_u32(abcd[l], iv[0]), vaddq_u32(efgh[l], iv[1])]);
+        let mut abcd: [uint32x4_t; N] = core::array::from_fn(|l| mid[l][0]);
+        let mut efgh: [uint32x4_t; N] = core::array::from_fn(|l| mid[l][1]);
+        rounds!(abcd, efgh, N, |g, l| vld1q_u32(PAD_KW.as_ptr().add(4 * g)), {});
+
+        for l in 0..N {
+            let node = out[l].as_mut_ptr();
+            vst1q_u8(node, vrev32q_u8(vreinterpretq_u8_u32(vaddq_u32(abcd[l], mid[l][0]))));
+            vst1q_u8(node.add(16), vrev32q_u8(vreinterpretq_u8_u32(vaddq_u32(efgh[l], mid[l][1]))));
+            out[l][NODE_SIZE - 1] &= 0b0011_1111;
+        }
+    }
+
+    /// Hash many 64-byte messages into truncated nodes, `LANES` at a time
+    #[target_feature(enable = "sha2")]
+    pub unsafe fn hash_many(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        let out = &mut out[..msgs.len()];
+        let mut msg_groups = msgs.chunks_exact(LANES);
+        let mut out_groups = out.chunks_exact_mut(LANES);
+        for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
+            hash_lanes::<LANES>(m, o);
+        }
+        for (m, o) in msg_groups.remainder().iter().zip(out_groups.into_remainder()) {
+            hash_lanes::<1>(core::slice::from_ref(m), core::slice::from_mut(o));
+        }
+    }
+}
+
+/// Multi-message SHA-256 with the x86 SHA extensions (SHA-NI)
+///
+/// Same approach as `arm`: `sha256rnds2` has several cycles of latency, so
+/// `LANES` independent messages are hashed in step, and the constant padding
+/// block skips its message schedule. The state is kept in SHA-NI's `ABEF`,
+/// `CDGH` word order until the end.
+#[cfg(target_arch = "x86_64")]
+mod x86 {
+    use super::{IV, K, NODE_SIZE, PAD_KW};
+    use core::arch::x86_64::*;
+
+    /// Messages hashed in step; more would spill the 16 XMM registers
+    const LANES: usize = 2;
+
+    /// Reverses the bytes of each `u32` (SHA-256 words are big-endian)
+    #[inline(always)]
+    unsafe fn bswap_mask() -> __m128i {
+        _mm_set_epi64x(0x0c0d0e0f_08090a0b, 0x04050607_00010203)
+    }
+
+    /// 64 rounds on each lane's `(abef, cdgh)` state, taking `K[i] + W[i]`
+    /// four at a time from `kw(group, lane)`, after which `update(group,
+    /// lane)` may extend that lane's message schedule
+    macro_rules! rounds {
+        ($abef:ident, $cdgh:ident, $n:expr, |$g:ident, $l:ident| $kw:expr, $update:expr) => {
+            for $g in 0..16 {
+                for $l in 0..$n {
+                    let kw = $kw;
+                    $cdgh[$l] = _mm_sha256rnds2_epu32($cdgh[$l], $abef[$l], kw);
+                    $abef[$l] = _mm_sha256rnds2_epu32($abef[$l], $cdgh[$l], _mm_shuffle_epi32(kw, 0x0e));
+                    $update;
+                }
+            }
+        };
+    }
+
+    /// Hash `N` independent 64-byte messages into truncated nodes
+    #[inline(always)]
+    unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        let mask = bswap_mask();
+        // IV as ABEF, CDGH
+        let dcba = _mm_loadu_si128(IV.as_ptr() as *const __m128i);
+        let hgfe = _mm_loadu_si128(IV.as_ptr().add(4) as *const __m128i);
+        let cdab = _mm_shuffle_epi32(dcba, 0xb1);
+        let efgh = _mm_shuffle_epi32(hgfe, 0x1b);
+        let iv = [_mm_alignr_epi8(cdab, efgh, 8), _mm_blend_epi16(efgh, cdab, 0xf0)];
+
+        // w[lane][j] holds schedule words 4j..4j+4, overwritten in place by
+        // the words 16 later
+        let mut w: [[__m128i; 4]; N] = core::array::from_fn(|l| {
+            core::array::from_fn(|j| {
+                _mm_shuffle_epi8(_mm_loadu_si128(msgs[l].as_ptr().add(16 * j) as *const __m128i), mask)
+            })
+        });
+        let mut abef = [iv[0]; N];
+        let mut cdgh = [iv[1]; N];
+        rounds!(abef, cdgh, N, |g, l| _mm_add_epi32(w[l][g % 4], _mm_loadu_si128(K.as_ptr().add(4 * g) as *const __m128i)), {
+            if g < 12 {
+                let next = _mm_sha256msg1_epu32(w[l][g % 4], w[l][(g + 1) % 4]);
+                let next = _mm_add_epi32(next, _mm_alignr_epi8(w[l][(g + 3) % 4], w[l][(g + 2) % 4], 4));
+                w[l][g % 4] = _mm_sha256msg2_epu32(next, w[l][(g + 3) % 4]);
+            }
+        });
+
+        // Second block: the padding, whose K + W is precomputed
+        let mid: [[__m128i; 2]; N] =
+            core::array::from_fn(|l| [_mm_add_epi32(abef[l], iv[0]), _mm_add_epi32(cdgh[l], iv[1])]);
+        let mut abef: [__m128i; N] = core::array::from_fn(|l| mid[l][0]);
+        let mut cdgh: [__m128i; N] = core::array::from_fn(|l| mid[l][1]);
+        rounds!(abef, cdgh, N, |g, l| _mm_loadu_si128(PAD_KW.as_ptr().add(4 * g) as *const __m128i), {});
+
+        for l in 0..N {
+            let abef = _mm_add_epi32(abef[l], mid[l][0]);
+            let cdgh = _mm_add_epi32(cdgh[l], mid[l][1]);
+            // Back to DCBA, HGFE, then big-endian bytes
+            let feba = _mm_shuffle_epi32(abef, 0x1b);
+            let dchg = _mm_shuffle_epi32(cdgh, 0xb1);
+            let dcba = _mm_blend_epi16(feba, dchg, 0xf0);
+            let hgfe = _mm_alignr_epi8(dchg, feba, 8);
+            let node = out[l].as_mut_ptr() as *mut __m128i;
+            _mm_storeu_si128(node, _mm_shuffle_epi8(dcba, mask));
+            _mm_storeu_si128(node.add(1), _mm_shuffle_epi8(hgfe, mask));
+            out[l][NODE_SIZE - 1] &= 0b0011_1111;
+        }
+    }
+
+    /// Hash many 64-byte messages into truncated nodes, `LANES` at a time
+    #[target_feature(enable = "sha,ssse3,sse4.1")]
+    pub unsafe fn hash_many(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        let out = &mut out[..msgs.len()];
+        let mut msg_groups = msgs.chunks_exact(LANES);
+        let mut out_groups = out.chunks_exact_mut(LANES);
+        for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
+            hash_lanes::<LANES>(m, o);
+        }
+        for (m, o) in msg_groups.remainder().iter().zip(out_groups.into_remainder()) {
+            hash_lanes::<1>(core::slice::from_ref(m), core::slice::from_mut(o));
+        }
+    }
+}
+
+/// Multi-message SHA-256 in software, for CPUs without SHA-256 instructions
+///
+/// The wasm32 `simd` module's approach on native SIMD: one message per `u32`
+/// lane, so each vector instruction advances `LANES` messages at once. The
+/// rounds are generic over [`Vector`]; each backend is a few intrinsics.
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+mod lanes {
+    use super::{truncated_hash_64, IV, K, NODE_SIZE, PAD_KW};
+
+    /// Most lanes of any [`Vector`], which sizes the transpose buffers
+    const MAX_LANES: usize = 16;
+
+    /// A SIMD register of `u32` lanes
+    ///
+    /// Methods are `unsafe` because they need the backend's target feature;
+    /// they are only reached through the `hash_many_*` entry points below.
+    trait Vector: Copy {
+        const LANES: usize;
+        unsafe fn splat(x: u32) -> Self;
+        /// Load `LANES` words
+        unsafe fn load(src: *const u32) -> Self;
+        /// Store `LANES` words
+        unsafe fn store(self, dst: *mut u32);
+        unsafe fn add(self, b: Self) -> Self;
+        unsafe fn xor(self, b: Self) -> Self;
+        unsafe fn and(self, b: Self) -> Self;
+        unsafe fn or(self, b: Self) -> Self;
+        unsafe fn shr<const N: i32>(self) -> Self;
+        /// Rotate right by `R`; `L` must be `32 - R`
+        unsafe fn rotr<const R: i32, const L: i32>(self) -> Self;
+
+        /// `a ^ b ^ c`
+        #[inline(always)]
+        unsafe fn xor3(a: Self, b: Self, c: Self) -> Self {
+            a.xor(b).xor(c)
+        }
+
+        /// SHA-256 `Ch(e, f, g)`
+        #[inline(always)]
+        unsafe fn ch(e: Self, f: Self, g: Self) -> Self {
+            g.xor(e.and(f.xor(g)))
+        }
+
+        /// SHA-256 `Maj(a, b, c)`
+        #[inline(always)]
+        unsafe fn maj(a: Self, b: Self, c: Self) -> Self {
+            a.and(b).or(c.and(a.or(b)))
+        }
+    }
+
+    /// One SHA-256 round; callers rotate the variable names instead of
+    /// moving the state
+    macro_rules! round {
+        ($a:ident, $b:ident, $c:ident, $d:ident, $e:ident, $f:ident, $g:ident, $h:ident, $kw:expr) => {
+            let s1 = V::xor3($e.rotr::<6, 26>(), $e.rotr::<11, 21>(), $e.rotr::<25, 7>());
+            let t1 = $h.add(s1).add(V::ch($e, $f, $g).add($kw));
+            let s0 = V::xor3($a.rotr::<2, 30>(), $a.rotr::<13, 19>(), $a.rotr::<22, 10>());
+            $d = $d.add(t1);
+            $h = t1.add(s0.add(V::maj($a, $b, $c)));
+        };
+    }
+
+    /// Eight rounds starting at `i`, rotating the names back to the start
+    macro_rules! rounds8 {
+        ($s:ident, $i:expr, |$j:ident| $kw:expr) => {{
+            let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = $s;
+            let kw = |$j: usize| $kw;
+            round!(a, b, c, d, e, f, g, h, kw($i));
+            round!(h, a, b, c, d, e, f, g, kw($i + 1));
+            round!(g, h, a, b, c, d, e, f, kw($i + 2));
+            round!(f, g, h, a, b, c, d, e, kw($i + 3));
+            round!(e, f, g, h, a, b, c, d, kw($i + 4));
+            round!(d, e, f, g, h, a, b, c, kw($i + 5));
+            round!(c, d, e, f, g, h, a, b, kw($i + 6));
+            round!(b, c, d, e, f, g, h, a, kw($i + 7));
+            $s = [a, b, c, d, e, f, g, h];
+        }};
+    }
+
+    /// Compress the message block; `w` holds its 16 words and is used as the
+    /// ring buffer for the message schedule
+    #[inline(always)]
+    unsafe fn compress_message<V: Vector>(state: [V; 8], w: &mut [V; 16]) -> [V; 8] {
+        let mut s = state;
+        for i in (0..64).step_by(8) {
+            if i >= 16 {
+                for j in i..i + 8 {
+                    let w15 = w[(j - 15) & 15];
+                    let w2 = w[(j - 2) & 15];
+                    let s0 = V::xor3(w15.rotr::<7, 25>(), w15.rotr::<18, 14>(), w15.shr::<3>());
+                    let s1 = V::xor3(w2.rotr::<17, 15>(), w2.rotr::<19, 13>(), w2.shr::<10>());
+                    w[j & 15] = w[j & 15].add(s0).add(w[(j - 7) & 15].add(s1));
+                }
+            }
+            rounds8!(s, i, |j| w[j & 15].add(V::splat(K[j])));
+        }
+        core::array::from_fn(|k| state[k].add(s[k]))
+    }
+
+    /// Compress the constant padding block, whose schedule is precomputed
+    #[inline(always)]
+    unsafe fn compress_padding<V: Vector>(state: [V; 8]) -> [V; 8] {
+        let mut s = state;
+        for i in (0..64).step_by(8) {
+            rounds8!(s, i, |j| V::splat(PAD_KW[j]));
+        }
+        core::array::from_fn(|k| state[k].add(s[k]))
+    }
+
+    /// Hash `V::LANES` independent 64-byte messages into truncated nodes
+    #[inline(always)]
+    unsafe fn hash_group<V: Vector>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        const { assert!(V::LANES <= MAX_LANES) };
+        // Transposes go through this buffer: lane `l` of a vector is `buf[l]`
+        let mut buf = [0u32; MAX_LANES];
+        let mut w: [V; 16] = [V::splat(0); 16];
+        for (j, word) in w.iter_mut().enumerate() {
+            for (l, msg) in msgs.iter().enumerate() {
+                buf[l] = u32::from_be_bytes(msg[4 * j..4 * j + 4].try_into().unwrap());
+            }
+            *word = V::load(buf.as_ptr());
+        }
+
+        let mid = compress_message(IV.map(|x| V::splat(x)), &mut w);
+        let s = compress_padding(mid);
+
+        for (k, word) in s.iter().enumerate() {
+            word.store(buf.as_mut_ptr());
+            for (l, node) in out.iter_mut().enumerate() {
+                node[4 * k..4 * k + 4].copy_from_slice(&buf[l].to_be_bytes());
+            }
+        }
+        for node in out.iter_mut() {
+            node[NODE_SIZE - 1] &= 0b0011_1111;
+        }
+    }
+
+    /// Hash many 64-byte messages into truncated nodes, `V::LANES` at a time
+    #[inline(always)]
+    unsafe fn hash_many<V: Vector>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        let out = &mut out[..msgs.len()];
+        let mut msg_groups = msgs.chunks_exact(V::LANES);
+        let mut out_groups = out.chunks_exact_mut(V::LANES);
+        for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
+            hash_group::<V>(m, o);
+        }
+        // A lone message is cheaper scalar; more share one zero-padded group
+        match (msg_groups.remainder(), out_groups.into_remainder()) {
+            ([], _) => {}
+            ([msg], [node]) => *node = truncated_hash_64(msg),
+            (rest, nodes) => {
+                let mut group = [[0u8; 64]; MAX_LANES];
+                let mut out = [[0u8; NODE_SIZE]; MAX_LANES];
+                group[..rest.len()].copy_from_slice(rest);
+                hash_group::<V>(&group[..V::LANES], &mut out[..V::LANES]);
+                nodes.copy_from_slice(&out[..nodes.len()]);
+            }
+        }
+    }
+
+    /// Two vectors used as one: independent instruction chains for CPUs
+    /// that can run several SIMD instructions per cycle
+    #[derive(Clone, Copy)]
+    struct Pair<V>(V, V);
+
+    impl<V: Vector> Vector for Pair<V> {
+        const LANES: usize = 2 * V::LANES;
+        #[inline(always)]
+        unsafe fn splat(x: u32) -> Self {
+            Pair(V::splat(x), V::splat(x))
+        }
+        #[inline(always)]
+        unsafe fn load(src: *const u32) -> Self {
+            Pair(V::load(src), V::load(src.add(V::LANES)))
+        }
+        #[inline(always)]
+        unsafe fn store(self, dst: *mut u32) {
+            self.0.store(dst);
+            self.1.store(dst.add(V::LANES));
+        }
+        #[inline(always)]
+        unsafe fn add(self, b: Self) -> Self {
+            Pair(self.0.add(b.0), self.1.add(b.1))
+        }
+        #[inline(always)]
+        unsafe fn xor(self, b: Self) -> Self {
+            Pair(self.0.xor(b.0), self.1.xor(b.1))
+        }
+        #[inline(always)]
+        unsafe fn and(self, b: Self) -> Self {
+            Pair(self.0.and(b.0), self.1.and(b.1))
+        }
+        #[inline(always)]
+        unsafe fn or(self, b: Self) -> Self {
+            Pair(self.0.or(b.0), self.1.or(b.1))
+        }
+        #[inline(always)]
+        unsafe fn shr<const N: i32>(self) -> Self {
+            Pair(self.0.shr::<N>(), self.1.shr::<N>())
+        }
+        #[inline(always)]
+        unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
+            Pair(self.0.rotr::<R, L>(), self.1.rotr::<R, L>())
+        }
+        #[inline(always)]
+        unsafe fn xor3(a: Self, b: Self, c: Self) -> Self {
+            Pair(V::xor3(a.0, b.0, c.0), V::xor3(a.1, b.1, c.1))
+        }
+        #[inline(always)]
+        unsafe fn ch(e: Self, f: Self, g: Self) -> Self {
+            Pair(V::ch(e.0, f.0, g.0), V::ch(e.1, f.1, g.1))
+        }
+        #[inline(always)]
+        unsafe fn maj(a: Self, b: Self, c: Self) -> Self {
+            Pair(V::maj(a.0, b.0, c.0), V::maj(a.1, b.1, c.1))
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    mod neon {
+        use core::arch::aarch64::*;
+
+        #[derive(Clone, Copy)]
+        pub struct Neon(uint32x4_t);
+
+        impl super::Vector for Neon {
+            const LANES: usize = 4;
+            #[inline(always)]
+            unsafe fn splat(x: u32) -> Self {
+                Neon(vdupq_n_u32(x))
+            }
+            #[inline(always)]
+            unsafe fn load(src: *const u32) -> Self {
+                Neon(vld1q_u32(src))
+            }
+            #[inline(always)]
+            unsafe fn store(self, dst: *mut u32) {
+                vst1q_u32(dst, self.0)
+            }
+            #[inline(always)]
+            unsafe fn add(self, b: Self) -> Self {
+                Neon(vaddq_u32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn xor(self, b: Self) -> Self {
+                Neon(veorq_u32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn and(self, b: Self) -> Self {
+                Neon(vandq_u32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn or(self, b: Self) -> Self {
+                Neon(vorrq_u32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn shr<const N: i32>(self) -> Self {
+                Neon(vshrq_n_u32::<N>(self.0))
+            }
+            /// Shift left, then shift-right-and-insert: 2 instructions
+            #[inline(always)]
+            unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
+                Neon(vsriq_n_u32::<R>(vshlq_n_u32::<L>(self.0), self.0))
+            }
+            /// Bitwise select: 1 instruction
+            #[inline(always)]
+            unsafe fn ch(e: Self, f: Self, g: Self) -> Self {
+                Neon(vbslq_u32(e.0, f.0, g.0))
+            }
+            /// Where `a` and `b` differ the majority is `c`, else `a`
+            #[inline(always)]
+            unsafe fn maj(a: Self, b: Self, c: Self) -> Self {
+                Neon(vbslq_u32(veorq_u32(a.0, b.0), c.0, a.0))
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    mod avx512 {
+        use core::arch::x86_64::*;
+
+        #[derive(Clone, Copy)]
+        pub struct Avx512(__m512i);
+
+        impl super::Vector for Avx512 {
+            const LANES: usize = 16;
+            #[inline(always)]
+            unsafe fn splat(x: u32) -> Self {
+                Avx512(_mm512_set1_epi32(x as i32))
+            }
+            #[inline(always)]
+            unsafe fn load(src: *const u32) -> Self {
+                Avx512(_mm512_loadu_si512(src as *const _))
+            }
+            #[inline(always)]
+            unsafe fn store(self, dst: *mut u32) {
+                _mm512_storeu_si512(dst as *mut _, self.0)
+            }
+            #[inline(always)]
+            unsafe fn add(self, b: Self) -> Self {
+                Avx512(_mm512_add_epi32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn xor(self, b: Self) -> Self {
+                Avx512(_mm512_xor_si512(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn and(self, b: Self) -> Self {
+                Avx512(_mm512_and_si512(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn or(self, b: Self) -> Self {
+                Avx512(_mm512_or_si512(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn shr<const N: i32>(self) -> Self {
+                Avx512(_mm512_srl_epi32(self.0, _mm_cvtsi32_si128(N)))
+            }
+            /// A real rotate: 1 instruction
+            #[inline(always)]
+            unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
+                Avx512(_mm512_ror_epi32::<R>(self.0))
+            }
+            // `vpternlogd` evaluates any 3-input bitwise function; the
+            // immediate is its truth table over (a, b, c) = (0xf0, 0xcc, 0xaa)
+            #[inline(always)]
+            unsafe fn xor3(a: Self, b: Self, c: Self) -> Self {
+                Avx512(_mm512_ternarylogic_epi32::<0x96>(a.0, b.0, c.0))
+            }
+            #[inline(always)]
+            unsafe fn ch(e: Self, f: Self, g: Self) -> Self {
+                Avx512(_mm512_ternarylogic_epi32::<0xca>(e.0, f.0, g.0))
+            }
+            #[inline(always)]
+            unsafe fn maj(a: Self, b: Self, c: Self) -> Self {
+                Avx512(_mm512_ternarylogic_epi32::<0xe8>(a.0, b.0, c.0))
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    mod avx2 {
+        use core::arch::x86_64::*;
+
+        #[derive(Clone, Copy)]
+        pub struct Avx2(__m256i);
+
+        impl super::Vector for Avx2 {
+            const LANES: usize = 8;
+            #[inline(always)]
+            unsafe fn splat(x: u32) -> Self {
+                Avx2(_mm256_set1_epi32(x as i32))
+            }
+            #[inline(always)]
+            unsafe fn load(src: *const u32) -> Self {
+                Avx2(_mm256_loadu_si256(src as *const __m256i))
+            }
+            #[inline(always)]
+            unsafe fn store(self, dst: *mut u32) {
+                _mm256_storeu_si256(dst as *mut __m256i, self.0)
+            }
+            #[inline(always)]
+            unsafe fn add(self, b: Self) -> Self {
+                Avx2(_mm256_add_epi32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn xor(self, b: Self) -> Self {
+                Avx2(_mm256_xor_si256(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn and(self, b: Self) -> Self {
+                Avx2(_mm256_and_si256(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn or(self, b: Self) -> Self {
+                Avx2(_mm256_or_si256(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn shr<const N: i32>(self) -> Self {
+                Avx2(_mm256_srli_epi32::<N>(self.0))
+            }
+            #[inline(always)]
+            unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
+                Avx2(_mm256_or_si256(_mm256_srli_epi32::<R>(self.0), _mm256_slli_epi32::<L>(self.0)))
+            }
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    mod sse2 {
+        use core::arch::x86_64::*;
+
+        #[derive(Clone, Copy)]
+        pub struct Sse2(__m128i);
+
+        impl super::Vector for Sse2 {
+            const LANES: usize = 4;
+            #[inline(always)]
+            unsafe fn splat(x: u32) -> Self {
+                Sse2(_mm_set1_epi32(x as i32))
+            }
+            #[inline(always)]
+            unsafe fn load(src: *const u32) -> Self {
+                Sse2(_mm_loadu_si128(src as *const __m128i))
+            }
+            #[inline(always)]
+            unsafe fn store(self, dst: *mut u32) {
+                _mm_storeu_si128(dst as *mut __m128i, self.0)
+            }
+            #[inline(always)]
+            unsafe fn add(self, b: Self) -> Self {
+                Sse2(_mm_add_epi32(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn xor(self, b: Self) -> Self {
+                Sse2(_mm_xor_si128(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn and(self, b: Self) -> Self {
+                Sse2(_mm_and_si128(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn or(self, b: Self) -> Self {
+                Sse2(_mm_or_si128(self.0, b.0))
+            }
+            #[inline(always)]
+            unsafe fn shr<const N: i32>(self) -> Self {
+                Sse2(_mm_srli_epi32::<N>(self.0))
+            }
+            #[inline(always)]
+            unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
+                Sse2(_mm_or_si128(_mm_srli_epi32::<R>(self.0), _mm_slli_epi32::<L>(self.0)))
+            }
+        }
+    }
+
+    /// NEON is part of every aarch64 target
+    #[cfg(target_arch = "aarch64")]
+    #[target_feature(enable = "neon")]
+    pub unsafe fn hash_many_neon(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        hash_many::<Pair<neon::Neon>>(msgs, out)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx512f")]
+    pub unsafe fn hash_many_avx512(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        hash_many::<avx512::Avx512>(msgs, out)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    pub unsafe fn hash_many_avx2(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        hash_many::<avx2::Avx2>(msgs, out)
+    }
+
+    /// SSE2 is part of every x86_64 target
+    #[cfg(target_arch = "x86_64")]
+    pub unsafe fn hash_many_sse2(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+        hash_many::<Pair<sse2::Sse2>>(msgs, out)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// Every backend this CPU supports matches sha2, for every group
+        /// remainder
+        #[test]
+        fn test_lanes_match_sha2() {
+            let msgs: Vec<[u8; 64]> = (0..37u32)
+                .map(|i| core::array::from_fn(|b| (i as u8).wrapping_mul(31) ^ (b as u8).wrapping_mul(7)))
+                .collect();
+            let expected: Vec<[u8; NODE_SIZE]> = msgs.iter().map(truncated_hash_64).collect();
+
+            #[allow(clippy::type_complexity)]
+            let mut backends: Vec<(&str, unsafe fn(&[[u8; 64]], &mut [[u8; NODE_SIZE]]))> = Vec::new();
+            #[cfg(target_arch = "aarch64")]
+            backends.push(("neon", hash_many_neon));
+            #[cfg(target_arch = "x86_64")]
+            {
+                backends.push(("sse2", hash_many_sse2));
+                if std::arch::is_x86_feature_detected!("avx2") {
+                    backends.push(("avx2", hash_many_avx2));
+                }
+                if std::arch::is_x86_feature_detected!("avx512f") {
+                    backends.push(("avx512", hash_many_avx512));
+                }
+            }
+            for (name, hash) in backends {
+                for n in 0..msgs.len() {
+                    let mut out = vec![[0u8; NODE_SIZE]; n];
+                    unsafe { hash(&msgs[..n], &mut out) };
+                    assert_eq!(out, expected[..n], "{name}, {n} messages");
+                }
+            }
+        }
     }
 }
 
@@ -186,41 +1066,8 @@ use simd::hash_many;
 /// lane of a `v128`.
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod simd {
-    use super::{truncated_hash_64, IV, NODE_SIZE};
+    use super::{truncated_hash_64, IV, K, NODE_SIZE, PAD_KW};
     use core::arch::wasm32::*;
-
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-    ];
-
-    /// `K[i] + W[i]` for the padding block of a 64-byte message, which is
-    /// always the same: `0x80`, zeros, then the bit length 512
-    const PAD_KW: [u32; 64] = {
-        let mut w = [0u32; 64];
-        w[0] = 0x8000_0000;
-        w[15] = 512;
-        let mut i = 16;
-        while i < 64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
-            i += 1;
-        }
-        let mut kw = [0u32; 64];
-        let mut i = 0;
-        while i < 64 {
-            kw[i] = K[i].wrapping_add(w[i]);
-            i += 1;
-        }
-        kw
-    };
 
     /// wasm SIMD has no rotate instruction
     #[inline(always)]
@@ -513,6 +1360,16 @@ impl Stack {
     }
 }
 
+/// Root of the subtree over one full batch of FR32-padded quads
+#[inline(always)]
+fn batch_root(quads: &[[u8; OUT_BYTES_PER_QUAD]]) -> [u8; NODE_SIZE] {
+    debug_assert_eq!(quads.len(), BATCH_QUADS);
+    let mut nodes = [[0u8; NODE_SIZE]; BATCH_LEAVES];
+    hash_many(as_messages(quads), &mut nodes);
+    reduce(&mut nodes, BATCH_LEAVES, 1, BATCH_LEVEL);
+    nodes[0]
+}
+
 /// View FR32-padded quads as their 64-byte halves (one message per leaf)
 #[inline(always)]
 fn as_messages(quads: &[[u8; OUT_BYTES_PER_QUAD]]) -> &[[u8; 64]] {
@@ -569,11 +1426,34 @@ impl CommPHasher {
 
     /// Hash a full batch into one subtree root and push it onto the stack
     fn flush_batch(&mut self) {
-        let mut nodes = [[0u8; NODE_SIZE]; BATCH_LEAVES];
-        hash_many(as_messages(&self.batch), &mut nodes);
-        reduce(&mut nodes, BATCH_LEAVES, 1, BATCH_LEVEL);
-        self.stack.push_at(nodes[0], BATCH_LEVEL, &mut self.concat_buffer);
+        let root = batch_root(&self.batch);
+        self.stack.push_at(root, BATCH_LEVEL, &mut self.concat_buffer);
         self.batch.clear();
+    }
+
+    /// Hash up to `PARALLEL_GROUP` full batches at the start of `input` on
+    /// all cores and push their roots in order; returns the bytes consumed
+    #[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+    fn push_batches_parallel(&mut self, input: &[u8]) -> usize {
+        use rayon::prelude::*;
+
+        debug_assert!(self.batch.is_empty());
+        let count = (input.len() / BATCH_BYTES).min(PARALLEL_GROUP);
+        let mut roots = [[0u8; NODE_SIZE]; PARALLEL_GROUP];
+        roots[..count]
+            .par_iter_mut()
+            .zip(input[..count * BATCH_BYTES].par_chunks_exact(BATCH_BYTES))
+            .for_each(|(root, batch)| {
+                let mut padded = [[0u8; OUT_BYTES_PER_QUAD]; BATCH_QUADS];
+                for (quad, out) in batch.chunks_exact(IN_BYTES_PER_QUAD).zip(&mut padded) {
+                    fr32_pad(quad, out);
+                }
+                *root = batch_root(&padded);
+            });
+        for &root in &roots[..count] {
+            self.stack.push_at(root, BATCH_LEVEL, &mut self.concat_buffer);
+        }
+        count * BATCH_BYTES
     }
 
     /// Write bytes into the hasher
@@ -613,6 +1493,11 @@ impl CommPHasher {
 
         // Process full quads directly from input
         while read_pos + IN_BYTES_PER_QUAD <= len {
+            #[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+            if self.batch.is_empty() && len - read_pos >= PARALLEL_MIN_BATCHES * BATCH_BYTES {
+                read_pos += self.push_batches_parallel(&bytes[read_pos..]);
+                continue;
+            }
             self.push_quad(&bytes[read_pos..read_pos + IN_BYTES_PER_QUAD]);
             read_pos += IN_BYTES_PER_QUAD;
         }
@@ -932,6 +1817,41 @@ mod tests {
                 hasher.write(chunk).unwrap();
             }
             assert_eq!(hasher.build(), naive_commp(&data[..size]), "{size} bytes");
+        }
+    }
+
+    #[test]
+    fn test_large_writes_match_naive() {
+        // Large writes take the `parallel` path when it is enabled, starting
+        // after any partial quad or batch left by the first write
+        let batch_bytes = BATCH_QUADS * IN_BYTES_PER_QUAD;
+        let data: Vec<u8> = (0..batch_bytes * 13 + 500).map(|i| (i * 13 + i / 509) as u8).collect();
+        for size in [batch_bytes * 4, batch_bytes * 9 + 1, data.len()] {
+            let expected = naive_commp(&data[..size]);
+            for first in [0, 1, 127, 128, batch_bytes / 2 + 3, batch_bytes, batch_bytes + 127] {
+                let mut hasher = CommPHasher::new();
+                hasher.write(&data[..first]).unwrap();
+                hasher.write(&data[first..size]).unwrap();
+                assert_eq!(hasher.build(), expected, "{size} bytes, first write {first}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_write_spanning_parallel_groups() {
+        // With `parallel`, one write of more than `PARALLEL_GROUP` batches is
+        // hashed in several groups; compare with small writes, which never are
+        let batch_bytes = BATCH_QUADS * IN_BYTES_PER_QUAD;
+        let data: Vec<u8> = (0..batch_bytes * (2 * 256 + 37) + 99).map(|i| (i * 7 + i / 1021) as u8).collect();
+        let mut expected = CommPHasher::new();
+        for chunk in data.chunks(1000) {
+            expected.write(chunk).unwrap();
+        }
+        for first in [0, 1, batch_bytes + 5] {
+            let mut hasher = CommPHasher::new();
+            hasher.write(&data[..first]).unwrap();
+            hasher.write(&data[first..]).unwrap();
+            assert_eq!(hasher.build(), expected.build(), "first write {first}");
         }
     }
 

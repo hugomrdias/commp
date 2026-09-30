@@ -60,24 +60,17 @@ fn main() {
     }
 }
 
-/// SHA-256 backend sha2 0.11 picks for `compress256` (see its sha256.rs)
-fn backend() -> &'static str {
+/// SHA-256 code rs/commp picks on this CPU, and how many threads hash
+fn backend() -> String {
+    let mut backend = commp::sha256_backend().to_string();
     if cfg!(sha2_backend = "soft") {
-        return "sha2/soft (forced)";
+        backend += ", forced";
     }
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    if std::arch::is_x86_feature_detected!("sha")
-        && std::arch::is_x86_feature_detected!("sse2")
-        && std::arch::is_x86_feature_detected!("ssse3")
-        && std::arch::is_x86_feature_detected!("sse4.1")
-    {
-        return "sha2/SHA-NI";
+    if cfg!(feature = "parallel") {
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+        backend += &format!(", {threads} threads");
     }
-    #[cfg(target_arch = "aarch64")]
-    if std::arch::is_aarch64_feature_detected!("sha2") {
-        return "sha2/ARMv8";
-    }
-    "sha2/soft"
+    backend
 }
 
 fn info() -> String {
