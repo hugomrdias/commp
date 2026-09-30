@@ -24,7 +24,7 @@ fn main() {
                     .find_map(|l| l.strip_prefix(key)?.strip_prefix(" = \"")?.strip_suffix('"'))
             };
             let name = field("name")?;
-            ["commp-wasm", "sha2", "cpufeatures"]
+            ["commp", "sha2", "cpufeatures"]
                 .contains(&name)
                 .then(|| format!(r#""{name}":"{}""#, field("version").unwrap_or("?")))
         })

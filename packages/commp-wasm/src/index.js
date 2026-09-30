@@ -7,10 +7,7 @@
  * @module @hugomrdias/commp-wasm
  */
 
-import {
-  CommPHasher as WasmHasher,
-  root as wasmRoot,
-} from './inline/commp_wasm.js'
+import { CommPHasher as WasmHasher, root as wasmRoot } from './inline/commp.js'
 import { decode as varintDecode } from './varint.js'
 
 /** @import { PieceDigest, StreamingHasher } from './types.js' */

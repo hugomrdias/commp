@@ -109,11 +109,11 @@ pnpm build:wasm
 This runs `wasm-pack` on `rs/commp` and then embeds the binary as a base64 string for synchronous loading (no async init, works everywhere):
 
 ```text
-WASM binary size: 21903 bytes
-Base64 size: 29204 chars
-Created: packages/commp-wasm/src/inline/commp_wasm_bg.wasm.js
-Created: packages/commp-wasm/src/inline/commp_wasm_bg.js
-Created: packages/commp-wasm/src/inline/commp_wasm.js
+WASM binary size: 21889 bytes
+Base64 size: 29188 chars
+Created: packages/commp-wasm/src/inline/commp_bg.wasm.js
+Created: packages/commp-wasm/src/inline/commp_bg.js
+Created: packages/commp-wasm/src/inline/commp.js
 ```
 
 ## Usage

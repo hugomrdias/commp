@@ -20,7 +20,7 @@ const pkgDir = join(__dirname, '../pkg-bundler')
 const outDir = join(__dirname, '../src/inline')
 
 // Read the wasm binary and base64 encode it
-const wasmPath = join(pkgDir, 'commp_wasm_bg.wasm')
+const wasmPath = join(pkgDir, 'commp_bg.wasm')
 const wasmBinary = readFileSync(wasmPath)
 const wasmBase64 = wasmBinary.toString('base64')
 
@@ -28,7 +28,7 @@ console.log(`WASM binary size: ${wasmBinary.length} bytes`)
 console.log(`Base64 size: ${wasmBase64.length} chars`)
 
 // Read the bg.js file to extract the bindings
-const bgJsPath = join(pkgDir, 'commp_wasm_bg.js')
+const bgJsPath = join(pkgDir, 'commp_bg.js')
 const bgJs = readFileSync(bgJsPath, 'utf-8')
 
 // Create output directory
@@ -38,7 +38,7 @@ mkdirSync(outDir, { recursive: true })
 const wasmLoaderContent = `// Auto-generated - do not edit
 // WASM binary embedded as base64 for synchronous loading
 
-import * as commp_wasm_bg from './commp_wasm_bg.js';
+import * as commp_bg from './commp_bg.js';
 
 const wasmBase64 = "${wasmBase64}";
 
@@ -60,14 +60,14 @@ function base64ToBytes(base64) {
 
 const wasmBinary = base64ToBytes(wasmBase64);
 const wasmModule = new WebAssembly.Module(wasmBinary);
-const importObject = { './commp_wasm_bg.js': commp_wasm_bg };
+const importObject = { './commp_bg.js': commp_bg };
 const wasm = new WebAssembly.Instance(wasmModule, importObject).exports;
 
 export { wasm };
 `
 
-writeFileSync(join(outDir, 'commp_wasm_bg.wasm.js'), wasmLoaderContent)
-console.log(`Created: ${join(outDir, 'commp_wasm_bg.wasm.js')}`)
+writeFileSync(join(outDir, 'commp_bg.wasm.js'), wasmLoaderContent)
+console.log(`Created: ${join(outDir, 'commp_bg.wasm.js')}`)
 
 // Copy and modify the bg.js file - we need to add __wbg_set_wasm export
 let modifiedBgJs = bgJs
@@ -82,16 +82,16 @@ export function __wbg_set_wasm(val) {
 ${modifiedBgJs.replace(/\bwasm\./g, 'wasm.')}`
 }
 
-writeFileSync(join(outDir, 'commp_wasm_bg.js'), modifiedBgJs)
-console.log(`Created: ${join(outDir, 'commp_wasm_bg.js')}`)
+writeFileSync(join(outDir, 'commp_bg.js'), modifiedBgJs)
+console.log(`Created: ${join(outDir, 'commp_bg.js')}`)
 
 // Create the main entry point
 const mainContent = `// Auto-generated - do not edit
 // CommP WASM with inline base64 encoding
 
-import { wasm } from "./commp_wasm_bg.wasm.js";
-export * from "./commp_wasm_bg.js";
-import { __wbg_set_wasm } from "./commp_wasm_bg.js";
+import { wasm } from "./commp_bg.wasm.js";
+export * from "./commp_bg.js";
+import { __wbg_set_wasm } from "./commp_bg.js";
 
 __wbg_set_wasm(wasm);
 
@@ -101,7 +101,7 @@ if (wasm.__wbindgen_start) {
 }
 `
 
-writeFileSync(join(outDir, 'commp_wasm.js'), mainContent)
-console.log(`Created: ${join(outDir, 'commp_wasm.js')}`)
+writeFileSync(join(outDir, 'commp.js'), mainContent)
+console.log(`Created: ${join(outDir, 'commp.js')}`)
 
 console.log('\n✅ Done! Inline WASM module created at:', outDir)

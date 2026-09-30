@@ -11,7 +11,7 @@
 mod common;
 
 use common::go_rand::GoRand;
-use commp_wasm::CommPHasher;
+use commp::CommPHasher;
 
 const DEFAULT_MAX_SIZE: u64 = 16 << 20;
 const NODE_SIZE: usize = 32;
