@@ -143,7 +143,7 @@ const VARIANTS = [
   },
   {
     id: 'rust-portable',
-    desc: 'Rust native, sha2 one message at a time (the pre-SIMD baseline)',
+    desc: 'Rust native, sha2 one message at a time (the code before the lane backends)',
     impl: 'rust',
     bin: 'rust-portable',
     optIn: true,
