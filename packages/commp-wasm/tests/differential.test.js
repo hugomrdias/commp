@@ -382,8 +382,10 @@ describe('MAX_PAYLOAD_SIZE', () => {
       name: 'RangeError',
       message: `Writing ${3 << 20} bytes exceeds max payload size of ${Wasm.MAX_PAYLOAD_SIZE}`,
     })
-    // @ts-expect-error private field
-    assert.strictEqual(hasher.inner.count(), 0n)
+    // Drop the stub to read the real count from the wasm hasher
+    // @ts-expect-error deleting a method
+    delete hasher.count
+    assert.strictEqual(hasher.count(), 0n)
     hasher.free()
   })
 })
