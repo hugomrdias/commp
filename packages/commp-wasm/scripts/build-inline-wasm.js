@@ -104,4 +104,11 @@ if (wasm.__wbindgen_start) {
 writeFileSync(join(outDir, 'commp.js'), mainContent)
 console.log(`Created: ${join(outDir, 'commp.js')}`)
 
+// Types for the entry point, so TypeScript skips the untyped glue code
+writeFileSync(
+  join(outDir, 'commp.d.ts'),
+  readFileSync(join(pkgDir, 'commp.d.ts'), 'utf-8')
+)
+console.log(`Created: ${join(outDir, 'commp.d.ts')}`)
+
 console.log('\n✅ Done! Inline WASM module created at:', outDir)

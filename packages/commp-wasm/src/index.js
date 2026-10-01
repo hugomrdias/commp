@@ -10,7 +10,10 @@
 import { CommPHasher as WasmHasher, root as wasmRoot } from './inline/commp.js'
 import { decode as varintDecode } from './varint.js'
 
-/** @import { PieceDigest, StreamingHasher } from './types.js' */
+/**
+ * @typedef {import('./types.js').PieceDigest} PieceDigest
+ * @typedef {import('./types.js').StreamingHasher} StreamingHasher
+ */
 
 /**
  * Largest slice passed to WASM per call. wasm-bindgen copies each input into
@@ -43,13 +46,7 @@ export const name = /** @type {const} */ (
  * @implements {StreamingHasher}
  */
 class Hasher {
-  constructor() {
-    /**
-     * @private
-     * @type {WasmHasher}
-     */
-    this.inner = new WasmHasher()
-  }
+  #inner = new WasmHasher()
 
   /**
    * Get the total number of bytes written
@@ -57,7 +54,7 @@ class Hasher {
    * @returns {bigint}
    */
   count() {
-    return BigInt(this.inner.count())
+    return BigInt(this.#inner.count())
   }
 
   /**
@@ -80,7 +77,7 @@ class Hasher {
       )
     }
     for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
-      this.inner.write(bytes.subarray(offset, offset + CHUNK_SIZE))
+      this.#inner.write(bytes.subarray(offset, offset + CHUNK_SIZE))
     }
     return this
   }
@@ -92,7 +89,7 @@ class Hasher {
    */
   digest() {
     // Format: code (varint) | size (varint) | padding (varint) | height | root
-    const bytes = this.inner.digest()
+    const bytes = this.#inner.digest()
     const [, codeLength] = varintDecode(bytes, 0)
     const [, sizeLength] = varintDecode(bytes, codeLength)
     const digestStart = codeLength + sizeLength
@@ -115,7 +112,7 @@ class Hasher {
    * @returns {this}
    */
   reset() {
-    this.inner.reset()
+    this.#inner.reset()
     return this
   }
 
@@ -123,14 +120,14 @@ class Hasher {
    * Dispose of resources
    */
   dispose() {
-    this.inner.free()
+    this.#inner.free()
   }
 
   /**
    * Free WASM resources (alias for dispose)
    */
   free() {
-    this.inner.free()
+    this.#inner.free()
   }
 }
 
@@ -200,10 +197,12 @@ export function root(payload) {
   if (payload.length <= CHUNK_SIZE) {
     return wasmRoot(payload)
   }
-  const hasher = create()
+  const hasher = new WasmHasher()
   try {
-    hasher.write(payload)
-    return hasher.inner.root()
+    for (let offset = 0; offset < payload.length; offset += CHUNK_SIZE) {
+      hasher.write(payload.subarray(offset, offset + CHUNK_SIZE))
+    }
+    return hasher.root()
   } finally {
     hasher.free()
   }

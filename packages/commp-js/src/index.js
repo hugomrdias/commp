@@ -28,7 +28,12 @@ import {
   encodingLength as varintEncodingLength,
 } from './varint.js'
 
-/** @import { StreamingHasher, PieceDigest } from './types.js' */
+/**
+ * @typedef {import('./types.js').HasherOptions} HasherOptions
+ * @typedef {import('./types.js').MerkleTreeNode} MerkleTreeNode
+ * @typedef {import('./types.js').PieceDigest} PieceDigest
+ * @typedef {import('./types.js').StreamingHasher} StreamingHasher
+ */
 
 /**
  * Scratch space for the 2 leaves of one quad
@@ -76,35 +81,33 @@ export const MAX_DIGEST_SIZE = CODE_SIZE + 10 + 10 + HEIGHT_SIZE + ROOT_SIZE
  * @implements {StreamingHasher}
  */
 class Hasher {
-  constructor() {
-    /**
-     * Total bytes written
-     * @private
-     * @type {bigint}
-     */
-    this.bytesWritten = 0n
+  /**
+   * Total bytes written
+   * @private
+   * @type {bigint}
+   */
+  bytesWritten = 0n
 
-    /**
-     * Buffer for accumulating bytes until we have a full quad (127 bytes)
-     * @private
-     * @type {Uint8Array}
-     */
-    this.buffer = new Uint8Array(IN_BYTES_PER_QUAD)
+  /**
+   * Buffer for accumulating bytes until we have a full quad (127 bytes)
+   * @private
+   * @type {Uint8Array}
+   */
+  buffer = new Uint8Array(IN_BYTES_PER_QUAD)
 
-    /**
-     * Current offset into the buffer
-     * @private
-     * @type {number}
-     */
-    this.offset = 0
+  /**
+   * Current offset into the buffer
+   * @private
+   * @type {number}
+   */
+  offset = 0
 
-    /**
-     * Pending tree nodes, one per level (O(log n) memory)
-     * @private
-     * @type {Stack}
-     */
-    this.stack = new Stack()
-  }
+  /**
+   * Pending tree nodes, one per level (O(log n) memory)
+   * @private
+   * @type {Stack}
+   */
+  stack = new Stack()
 
   /**
    * Get the total number of bytes written

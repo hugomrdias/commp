@@ -12,7 +12,7 @@
     "build:wasm": "pnpm --filter @hugomrdias/commp-wasm build:wasm",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "lint:root": "biome check package.json biome.json pnpm-workspace.yaml turbo.json .github compare",
+    "lint:root": "biome check package.json biome.json pnpm-workspace.yaml tsconfig.base.json turbo.json .github compare",
     "bench": "pnpm --filter bench bench",
     "bench:browser": "pnpm --filter bench bench:browser",
     "compare": "node compare/run.js",
