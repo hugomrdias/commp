@@ -1,6 +1,6 @@
 {
   "name": "@hugomrdias/commp-js",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fast CommP (Filecoin Piece Commitment) pure JavaScript implementation",
   "keywords": [
     "filecoin",
