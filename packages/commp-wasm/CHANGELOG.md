@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.1...commp-wasm-v0.1.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* publish type declarations generated from JSDoc ([#32](https://github.com/hugomrdias/commp/issues/32)) ([4b7654e](https://github.com/hugomrdias/commp/commit/4b7654e9f793477f2b237f826bfdbdb937d56d98))
+
 ## [0.1.1](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.0...commp-wasm-v0.1.1) (2026-09-30)
 
 

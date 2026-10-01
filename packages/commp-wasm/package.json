@@ -1,6 +1,6 @@
 {
   "name": "@hugomrdias/commp-wasm",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Fast CommP (Filecoin Piece Commitment) WASM implementation with inline base64",
   "keywords": [
     "filecoin",
