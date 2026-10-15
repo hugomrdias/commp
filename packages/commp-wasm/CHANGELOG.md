@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.2...commp-wasm-v0.1.3) (2026-10-15)
+
+
+### Bug Fixes
+
+* **commp-wasm:** keep imports working when WASM compilation is blocked ([#36](https://github.com/hugomrdias/commp/issues/36)) ([0835bab](https://github.com/hugomrdias/commp/commit/0835bab5ca563ea041565d7880e117b39da5f11e))
+
 ## [0.1.2](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.1...commp-wasm-v0.1.2) (2026-10-01)
 
 
