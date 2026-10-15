@@ -1,6 +1,6 @@
 # @hugomrdias/commp-wasm
 
-Fast CommP (Filecoin Piece Commitment) in Rust/WASM with 4-lane SIMD SHA-256. The WASM is inlined as base64, so there is no async init and no bundler configuration. It is compiled on first use, so importing never compiles WebAssembly.
+Fast CommP (Filecoin Piece Commitment) in Rust/WASM with 4-lane SIMD SHA-256. The WASM is inlined as base64, so there is no async init and no bundler configuration.
 
 ## Install
 
@@ -30,7 +30,7 @@ hasher.free() // Free WASM memory when done
 
 ## Content-Security-Policy
 
-The WASM module is compiled on first use, not at import. In browsers, a page whose Content-Security-Policy sets `script-src` must allow `'wasm-unsafe-eval'` for hashing to work:
+In browsers, a page whose Content-Security-Policy sets `script-src` must allow `'wasm-unsafe-eval'` for hashing to work:
 
 ```
 Content-Security-Policy: script-src 'self' 'wasm-unsafe-eval'

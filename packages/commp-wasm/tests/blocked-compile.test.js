@@ -1,5 +1,5 @@
 /**
- * Lazy WASM compilation tests
+ * Blocked WASM compilation tests
  *
  * A Content-Security-Policy without 'wasm-unsafe-eval' makes WebAssembly
  * compilation throw. Importing must still work; only hashing should fail.
@@ -36,8 +36,8 @@ async function runBlocked(body) {
   return stdout.trim()
 }
 
-describe('lazy wasm compilation', () => {
-  it('imports without compiling WebAssembly', async () => {
+describe('blocked wasm compilation', () => {
+  it('imports when WebAssembly compilation is blocked', async () => {
     const out = await runBlocked('console.log(typeof Commp.create, Commp.code)')
     assert.strictEqual(out, 'function 4113')
   })

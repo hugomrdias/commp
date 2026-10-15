@@ -1,5 +1,5 @@
 // Auto-generated - do not edit
-// WASM binary embedded as base64, compiled synchronously on first use
+// WASM binary embedded as base64 for synchronous loading
 
 import * as commp_bg from './commp_bg.js';
 

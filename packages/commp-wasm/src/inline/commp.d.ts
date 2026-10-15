@@ -67,6 +67,6 @@ export function digest(data: Uint8Array): Uint8Array;
 export function root(data: Uint8Array): Uint8Array;
 
 /**
- * Compile the WASM module on first call and return its exports.
+ * WASM exports, or undefined if compilation failed.
  */
-export function init(): WebAssembly.Exports;
+export const wasm: WebAssembly.Exports | undefined;

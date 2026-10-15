@@ -13,7 +13,7 @@ import * as Ref from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
 import * as JSVarint from '../../commp-js/src/varint.js'
 import * as Wasm from '../src/index.js'
-import { CommPHasher, init } from '../src/inline/commp.js'
+import { CommPHasher, wasm } from '../src/inline/commp.js'
 import * as WasmVarint from '../src/varint.js'
 
 /**
@@ -287,7 +287,7 @@ describe('inline wasm loader', () => {
 })
 
 describe('wasm memory', () => {
-  const memory = /** @type {WebAssembly.Memory} */ (init().memory)
+  const memory = /** @type {WebAssembly.Memory} */ (wasm?.memory)
 
   it('one-shot digest and root of 64 MiB grow memory by at most a chunk', function () {
     this.timeout(60_000)
