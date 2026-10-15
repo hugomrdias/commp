@@ -28,6 +28,16 @@ const streamResult = hasher.digest()
 hasher.free() // Free WASM memory when done
 ```
 
+## Content-Security-Policy
+
+In browsers, a page whose Content-Security-Policy sets `script-src` must allow `'wasm-unsafe-eval'` for hashing to work:
+
+```
+Content-Security-Policy: script-src 'self' 'wasm-unsafe-eval'
+```
+
+Without it, importing still works, but the first hash throws an error that names the missing directive, with the browser's `CompileError` as its `cause`.
+
 See the [repository README](https://github.com/hugomrdias/commp#readme) for the full API and benchmarks.
 
 ## License

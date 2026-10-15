@@ -65,3 +65,8 @@ export function digest(data: Uint8Array): Uint8Array;
  * This is the Merkle root of the FR32-padded, SHA256-hashed binary tree.
  */
 export function root(data: Uint8Array): Uint8Array;
+
+/**
+ * WASM exports, or undefined if compilation failed.
+ */
+export const wasm: WebAssembly.Exports | undefined;
