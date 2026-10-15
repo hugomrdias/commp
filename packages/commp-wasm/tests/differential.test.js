@@ -13,8 +13,7 @@ import * as Ref from '@web3-storage/data-segment/multihash'
 import { describe, it } from 'mocha'
 import * as JSVarint from '../../commp-js/src/varint.js'
 import * as Wasm from '../src/index.js'
-import { CommPHasher } from '../src/inline/commp.js'
-import { wasm } from '../src/inline/commp_bg.wasm.js'
+import { CommPHasher, init } from '../src/inline/commp.js'
 import * as WasmVarint from '../src/varint.js'
 
 /**
@@ -263,7 +262,7 @@ describe('inline wasm loader', () => {
    */
   async function load(name) {
     const fresh = await import(`${loaderUrl}?${name}`)
-    assert.ok(fresh.wasm.memory instanceof WebAssembly.Memory)
+    assert.ok(fresh.load().memory instanceof WebAssembly.Memory)
   }
 
   it('decodes without Uint8Array.fromBase64 (Buffer)', async () => {
@@ -288,15 +287,17 @@ describe('inline wasm loader', () => {
 })
 
 describe('wasm memory', () => {
+  const memory = /** @type {WebAssembly.Memory} */ (init().memory)
+
   it('one-shot digest and root of 64 MiB grow memory by at most a chunk', function () {
     this.timeout(60_000)
     const data = new Uint8Array(64 << 20).fill(3)
-    const before = wasm.memory.buffer.byteLength
+    const before = memory.buffer.byteLength
     Wasm.digest(data)
     Wasm.root(data)
     assert.ok(
-      wasm.memory.buffer.byteLength - before <= 2 << 20,
-      `grew by ${wasm.memory.buffer.byteLength - before} bytes`
+      memory.buffer.byteLength - before <= 2 << 20,
+      `grew by ${memory.buffer.byteLength - before} bytes`
     )
   })
 
@@ -306,10 +307,10 @@ describe('wasm memory', () => {
     const hasher = new CommPHasher()
     // The first write may grow memory to fit the chunk copy
     hasher.write(chunk)
-    const before = wasm.memory.buffer.byteLength
+    const before = memory.buffer.byteLength
     for (let i = 1; i < 256; i++) hasher.write(chunk)
     hasher.digest()
-    assert.strictEqual(wasm.memory.buffer.byteLength, before)
+    assert.strictEqual(memory.buffer.byteLength, before)
     hasher.free()
   })
 })

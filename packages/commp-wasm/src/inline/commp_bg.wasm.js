@@ -1,5 +1,5 @@
 // Auto-generated - do not edit
-// WASM binary embedded as base64 for synchronous loading
+// WASM binary embedded as base64, compiled synchronously on first use
 
 import * as commp_bg from './commp_bg.js';
 
@@ -21,9 +21,22 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
-const wasmBinary = base64ToBytes(wasmBase64);
-const wasmModule = new WebAssembly.Module(wasmBinary);
-const importObject = { './commp_bg.js': commp_bg };
-const wasm = new WebAssembly.Instance(wasmModule, importObject).exports;
-
-export { wasm };
+/**
+ * Compile and instantiate the WASM module, returning its exports.
+ *
+ * Throws if WebAssembly compilation is blocked, e.g. by a
+ * Content-Security-Policy without 'wasm-unsafe-eval'.
+ */
+export function load() {
+  let wasmModule;
+  try {
+    wasmModule = new WebAssembly.Module(base64ToBytes(wasmBase64));
+  } catch (cause) {
+    throw new Error(
+      "@hugomrdias/commp-wasm: failed to compile WebAssembly. If a Content-Security-Policy is set, script-src must allow 'wasm-unsafe-eval'.",
+      { cause }
+    );
+  }
+  const importObject = { './commp_bg.js': commp_bg };
+  return new WebAssembly.Instance(wasmModule, importObject).exports;
+}

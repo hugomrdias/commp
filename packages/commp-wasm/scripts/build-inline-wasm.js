@@ -8,6 +8,9 @@
  * Benefits:
  * - No separate .wasm file to load
  * - Synchronous instantiation (no async init)
+ * - Lazy compilation on first use, so importing never compiles WebAssembly
+ *   (keeps imports working under a Content-Security-Policy without
+ *   'wasm-unsafe-eval')
  * - Works in Node.js, browsers, Deno, Bun without special handling
  */
 
@@ -36,7 +39,7 @@ mkdirSync(outDir, { recursive: true })
 
 // Generate the inline wasm loader
 const wasmLoaderContent = `// Auto-generated - do not edit
-// WASM binary embedded as base64 for synchronous loading
+// WASM binary embedded as base64, compiled synchronously on first use
 
 import * as commp_bg from './commp_bg.js';
 
@@ -58,12 +61,25 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
-const wasmBinary = base64ToBytes(wasmBase64);
-const wasmModule = new WebAssembly.Module(wasmBinary);
-const importObject = { './commp_bg.js': commp_bg };
-const wasm = new WebAssembly.Instance(wasmModule, importObject).exports;
-
-export { wasm };
+/**
+ * Compile and instantiate the WASM module, returning its exports.
+ *
+ * Throws if WebAssembly compilation is blocked, e.g. by a
+ * Content-Security-Policy without 'wasm-unsafe-eval'.
+ */
+export function load() {
+  let wasmModule;
+  try {
+    wasmModule = new WebAssembly.Module(base64ToBytes(wasmBase64));
+  } catch (cause) {
+    throw new Error(
+      "@hugomrdias/commp-wasm: failed to compile WebAssembly. If a Content-Security-Policy is set, script-src must allow 'wasm-unsafe-eval'.",
+      { cause }
+    );
+  }
+  const importObject = { './commp_bg.js': commp_bg };
+  return new WebAssembly.Instance(wasmModule, importObject).exports;
+}
 `
 
 writeFileSync(join(outDir, 'commp_bg.wasm.js'), wasmLoaderContent)
@@ -89,16 +105,31 @@ console.log(`Created: ${join(outDir, 'commp_bg.js')}`)
 const mainContent = `// Auto-generated - do not edit
 // CommP WASM with inline base64 encoding
 
-import { wasm } from "./commp_bg.wasm.js";
+import { load } from "./commp_bg.wasm.js";
 export * from "./commp_bg.js";
 import { __wbg_set_wasm } from "./commp_bg.js";
 
-__wbg_set_wasm(wasm);
+let wasm;
 
-// Run wasm start function if present
-if (wasm.__wbindgen_start) {
-  wasm.__wbindgen_start();
+/**
+ * Compile the WASM module on first call and return its exports.
+ */
+export function init() {
+  if (wasm === undefined) {
+    const exports = load();
+    __wbg_set_wasm(exports);
+    // Run wasm start function if present
+    if (exports.__wbindgen_start) {
+      exports.__wbindgen_start();
+    }
+    wasm = exports;
+  }
+  return wasm;
 }
+
+// Compile on first use instead of at import. The first access through this
+// proxy swaps in the real exports, so later calls skip the proxy entirely.
+__wbg_set_wasm(new Proxy({}, { get: (_, key) => init()[key] }));
 `
 
 writeFileSync(join(outDir, 'commp.js'), mainContent)
@@ -107,7 +138,12 @@ console.log(`Created: ${join(outDir, 'commp.js')}`)
 // Types for the entry point, so TypeScript skips the untyped glue code
 writeFileSync(
   join(outDir, 'commp.d.ts'),
-  readFileSync(join(pkgDir, 'commp.d.ts'), 'utf-8')
+  `${readFileSync(join(pkgDir, 'commp.d.ts'), 'utf-8')}
+/**
+ * Compile the WASM module on first call and return its exports.
+ */
+export function init(): WebAssembly.Exports;
+`
 )
 console.log(`Created: ${join(outDir, 'commp.d.ts')}`)
 
