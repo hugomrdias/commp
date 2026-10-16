@@ -26,7 +26,7 @@ const MAX_LEVEL = 64
 function hashPairInto(left, right, out, outOffset) {
   CONCAT_BUFFER.set(left, 0)
   CONCAT_BUFFER.set(right, NODE_SIZE)
-  truncatedHashInto(CONCAT_BUFFER, out, outOffset)
+  truncatedHashInto(CONCAT_BUFFER, 0, out, outOffset)
 }
 
 /**

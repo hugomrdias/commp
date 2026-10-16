@@ -216,17 +216,22 @@ importers:
         version: 6.2.0
 
   packages/commp-js:
-    dependencies:
-      '@webbuf/sha256':
-        specifier: ^4.0.1
-        version: 4.0.1(@webbuf/fixedbuf@4.0.1(@webbuf/webbuf@4.0.1))(@webbuf/webbuf@4.0.1)
     devDependencies:
+      '@cloudflare/vitest-plugin':
+        specifier: 'catalog:'
+        version: 1.4.3(vitest@4.1.12(vite@8.3.4(esbuild@0.28.2)))
+      '@web3-storage/data-segment':
+        specifier: 'catalog:'
+        version: 5.3.0
       mocha:
         specifier: 'catalog:'
         version: 12.0.2
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.12(vite@8.3.4(esbuild@0.28.2))
 
   packages/commp-wasm:
     devDependencies:
@@ -1209,23 +1214,6 @@ packages:
 
   '@web3-storage/data-segment@5.3.0':
     resolution: {integrity: sha512-zFJ4m+pEKqtKatJNsFrk/2lHeFSbkXZ6KKXjBe7/2ayA9wAar7T/unewnOcZrrZTnCWmaxKsXWqdMFy9bXK9dw==}
-
-  '@webbuf/fixedbuf@4.0.1':
-    resolution: {integrity: sha512-M5ODXTrAI84+q1KR/7GXNN/IB7G/Gq0e+madTEFOazjFoaC+hDDq/90vzo2EdDiO3DaVjFao5svjD6OfyNckyA==}
-    engines: {node: '>=20.8.0'}
-    peerDependencies:
-      '@webbuf/webbuf': ^4.0.1
-
-  '@webbuf/sha256@4.0.1':
-    resolution: {integrity: sha512-c7hCgdP92XEJvDwhRLvZ8zh6/5fZuktfTgeKqH8+AsKLfLMsWKfbKEXmhzxvO+JpCAaNoWrj1RnKyUCe2Dn1BQ==}
-    engines: {node: '>=20.8.0'}
-    peerDependencies:
-      '@webbuf/fixedbuf': ^4.0.1
-      '@webbuf/webbuf': ^4.0.1
-
-  '@webbuf/webbuf@4.0.1':
-    resolution: {integrity: sha512-49TqeoHvA3SPerkKeWinJUSrBCvOIz+UuVNFhYInF0m2/AH+uL4/Zdg5hhTCQcL1+3t8HfWDTyv5N8f5VN/xrQ==}
-    engines: {node: '>=20.8.0'}
 
   acorn-loose@8.5.2:
     resolution: {integrity: sha512-PPvV6g8UGMGgjrMu+n/f9E/tCSkNQ2Y97eFvuVdJfG11+xdIeDcLyNdC8SHcrHbRqkfwLASdplyR6B6sKM1U4A==}
@@ -3066,17 +3054,6 @@ snapshots:
       '@ipld/dag-cbor': 9.2.7
       multiformats: 13.4.2
       sync-multihash-sha2: 1.0.0
-
-  '@webbuf/fixedbuf@4.0.1(@webbuf/webbuf@4.0.1)':
-    dependencies:
-      '@webbuf/webbuf': 4.0.1
-
-  '@webbuf/sha256@4.0.1(@webbuf/fixedbuf@4.0.1(@webbuf/webbuf@4.0.1))(@webbuf/webbuf@4.0.1)':
-    dependencies:
-      '@webbuf/fixedbuf': 4.0.1(@webbuf/webbuf@4.0.1)
-      '@webbuf/webbuf': 4.0.1
-
-  '@webbuf/webbuf@4.0.1': {}
 
   acorn-loose@8.5.2:
     dependencies:

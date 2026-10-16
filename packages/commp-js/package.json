@@ -31,14 +31,15 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tests && mocha \"tests/**/*.test.js\"",
+    "test": "tsc -p tests && mocha \"tests/*.test.js\" && pnpm test:workerd",
+    "test:workerd": "vitest run --config tests/workerd/vitest.config.js",
     "lint": "biome check ."
   },
-  "dependencies": {
-    "@webbuf/sha256": "^4.0.1"
-  },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "catalog:",
+    "@web3-storage/data-segment": "catalog:",
     "mocha": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

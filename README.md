@@ -13,7 +13,7 @@ Node 26, Apple Silicon, 1 MiB streaming (`pnpm bench`):
 | Implementation | MiB/s | Speedup |
 |---|---|---|
 | Original JS (`@web3-storage/data-segment`) | 11.8 | 1.00x |
-| Fast JS (`@webbuf/sha256`) | 41.4 | 3.52x |
+| Pure JS (`@hugomrdias/commp-js`) | 46.1 | 3.91x |
 | **Rust WASM (inline base64)** | **181.2** | **15.38x** |
 
 ### Browsers
@@ -23,7 +23,7 @@ Apple Silicon, 1 MiB streaming, via [playwright-test](https://github.com/hugomrd
 | Implementation | Chromium 153 | Firefox 155 | WebKit (Safari 26.6) |
 | --- | --- | --- | --- |
 | Original JS (`@web3-storage/data-segment`) | 7.5 | 5.0 | 16.5 |
-| Fast JS (`@webbuf/sha256`) | 43.8 | 31.7 | 36.4 |
+| Pure JS (`@hugomrdias/commp-js`) | 45.6 | 37.4 | 38.1 |
 | **Rust WASM (inline base64)** | **185.6** | **170.7** | **187.3** |
 | WASM speedup vs original | 24.8x | 34.2x | 11.3x |
 

@@ -1,6 +1,6 @@
 # @hugomrdias/commp-js
 
-Fast CommP (Filecoin Piece Commitment) in pure JavaScript, using [`@webbuf/sha256`](https://www.npmjs.com/package/@webbuf/sha256) and streaming with O(log n) memory.
+Fast CommP (Filecoin Piece Commitment) in pure JavaScript, with no dependencies and no WebAssembly, streaming with O(log n) memory. Works in Node.js, browsers, Deno, Bun and Cloudflare Workers.
 
 For the fastest implementation use [`@hugomrdias/commp-wasm`](../commp-wasm).
 

@@ -17,7 +17,7 @@ async function run() {
       hasher.write(oneMB)
       hasher.digest()
     })
-    .add('1MB - fast JS (@webbuf/sha256)', () => {
+    .add('1MB - pure JS (commp-js)', () => {
       const hasher = HasherFast.create()
       hasher.write(oneMB)
       hasher.digest()
