@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.3...commp-wasm-v0.1.4) (2026-10-16)
+
+
+### Bug Fixes
+
+* **commp-wasm:** load precompiled WASM in Cloudflare Workers ([#39](https://github.com/hugomrdias/commp/issues/39)) ([d400cdd](https://github.com/hugomrdias/commp/commit/d400cddc90a90a04944c687a00327bf28e5e0f0c)), closes [#38](https://github.com/hugomrdias/commp/issues/38)
+
 ## [0.1.3](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.2...commp-wasm-v0.1.3) (2026-10-15)
 
 
