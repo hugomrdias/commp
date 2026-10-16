@@ -80,12 +80,8 @@ export function fr32PadInto(source, offset, output) {
  */
 export function readQuad(source, sourceOffset, leaves, leafOffset) {
   fr32PadInto(source, sourceOffset, FR32_BUFFER)
-  truncatedHashInto(FR32_BUFFER.subarray(0, 64), leaves, leafOffset)
-  truncatedHashInto(
-    FR32_BUFFER.subarray(64, 128),
-    leaves,
-    leafOffset + NODE_SIZE
-  )
+  truncatedHashInto(FR32_BUFFER, 0, leaves, leafOffset)
+  truncatedHashInto(FR32_BUFFER, 64, leaves, leafOffset + NODE_SIZE)
 }
 
 /**

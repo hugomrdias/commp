@@ -1,0 +1,5 @@
+// Worker config for the workerd tests
+{
+  "name": "commp-js-tests",
+  "compatibility_date": "2026-08-15"
+}
