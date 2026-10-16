@@ -22,6 +22,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "workerd": "./src/index.workerd.js",
       "import": "./src/index.js"
     }
   },
@@ -36,13 +37,16 @@
     "build:inline": "node scripts/build-inline-wasm.js",
     "build:wasm": "pnpm build:rust && pnpm build:inline",
     "clean": "rm -rf pkg-bundler dist",
-    "test": "tsc -p tests && mocha \"tests/**/*.test.js\"",
+    "test": "tsc -p tests && mocha \"tests/*.test.js\" && pnpm test:workerd",
+    "test:workerd": "vitest run --config tests/workerd/vitest.config.js",
     "lint": "biome check ."
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "catalog:",
     "@hugomrdias/commp-js": "workspace:*",
     "@web3-storage/data-segment": "catalog:",
     "mocha": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
