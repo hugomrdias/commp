@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/hugomrdias/commp/compare/commp-js-v0.1.1...commp-js-v0.1.2) (2026-10-16)
+
+
+### Bug Fixes
+
+* **commp-js:** hash with pure JS SHA-256 so it works in Cloudflare Workers ([#41](https://github.com/hugomrdias/commp/issues/41)) ([4f54033](https://github.com/hugomrdias/commp/commit/4f54033c047264530a4b02c0d026215d63d0cdcd))
+
 ## [0.1.1](https://github.com/hugomrdias/commp/compare/commp-js-v0.1.0...commp-js-v0.1.1) (2026-10-01)
 
 
