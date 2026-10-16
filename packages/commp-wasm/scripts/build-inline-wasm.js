@@ -12,9 +12,14 @@
  *   (keeps imports working under a Content-Security-Policy without
  *   'wasm-unsafe-eval')
  * - Works in Node.js, browsers, Deno, Bun without special handling
+ *
+ * It also writes a workerd (Cloudflare Workers) entry that imports the .wasm
+ * file instead. workerd only compiles WebAssembly from bytes during startup,
+ * so the inline base64 fails when the module is evaluated later (dynamic
+ * import, vitest). Wrangler compiles an imported .wasm ahead of time.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -140,10 +145,50 @@ export { wasm };
 writeFileSync(join(outDir, 'commp.js'), mainContent)
 console.log(`Created: ${join(outDir, 'commp.js')}`)
 
-// Types for the entry point, so TypeScript skips the untyped glue code
+// Raw .wasm for the workerd entry
+copyFileSync(wasmPath, join(outDir, 'commp_bg.wasm'))
+console.log(`Created: ${join(outDir, 'commp_bg.wasm')}`)
+
+// workerd entry: the bundler compiles the imported .wasm, so nothing is
+// compiled at runtime
+const workerdContent = `// Auto-generated - do not edit
+// CommP WASM for workerd (Cloudflare Workers)
+//
+// workerd only compiles WebAssembly from bytes during startup, so the inline
+// base64 fails when this module is evaluated later (dynamic import, vitest).
+// Wrangler compiles an imported .wasm file ahead of time instead.
+
+import wasmModule from "./commp_bg.wasm";
+import * as commp_bg from "./commp_bg.js";
+export * from "./commp_bg.js";
+
+const importObject = { "./commp_bg.js": commp_bg };
+const wasm = new WebAssembly.Instance(wasmModule, importObject).exports;
+commp_bg.__wbg_set_wasm(wasm);
+// Run wasm start function if present
+if (wasm.__wbindgen_start) {
+  wasm.__wbindgen_start();
+}
+
+export { wasm };
+`
+
+writeFileSync(join(outDir, 'commp.workerd.js'), workerdContent)
+console.log(`Created: ${join(outDir, 'commp.workerd.js')}`)
+
+// Types for the bindings, so TypeScript skips the untyped glue code
+writeFileSync(
+  join(outDir, 'commp_bg.d.ts'),
+  `${readFileSync(join(pkgDir, 'commp.d.ts'), 'utf-8')}
+export function __wbg_set_wasm(val: WebAssembly.Exports): void;
+`
+)
+console.log(`Created: ${join(outDir, 'commp_bg.d.ts')}`)
+
 writeFileSync(
   join(outDir, 'commp.d.ts'),
-  `${readFileSync(join(pkgDir, 'commp.d.ts'), 'utf-8')}
+  `export * from "./commp_bg.js";
+
 /**
  * WASM exports, or undefined if compilation failed.
  */
@@ -151,5 +196,17 @@ export const wasm: WebAssembly.Exports | undefined;
 `
 )
 console.log(`Created: ${join(outDir, 'commp.d.ts')}`)
+
+writeFileSync(
+  join(outDir, 'commp.workerd.d.ts'),
+  `export * from "./commp_bg.js";
+
+/**
+ * WASM exports.
+ */
+export const wasm: WebAssembly.Exports;
+`
+)
+console.log(`Created: ${join(outDir, 'commp.workerd.d.ts')}`)
 
 console.log('\n✅ Done! Inline WASM module created at:', outDir)

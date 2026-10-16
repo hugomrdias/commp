@@ -1,0 +1,6 @@
+// Worker config for the workerd tests; Wrangler's default module rules load
+// imported .wasm files as compiled modules, like in a real Worker project
+{
+  "name": "commp-wasm-tests",
+  "compatibility_date": "2026-08-15"
+}

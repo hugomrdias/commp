@@ -38,6 +38,10 @@ Content-Security-Policy: script-src 'self' 'wasm-unsafe-eval'
 
 Without it, importing still works, but the first hash throws an error that names the missing directive, with the browser's `CompileError` as its `cause`.
 
+## Cloudflare Workers
+
+workerd only compiles WebAssembly from bytes while a Worker starts up, so the inline base64 can't be used when the package is evaluated later (a dynamic import, a lazily loaded route chunk, or `@cloudflare/vitest-plugin`). For workerd the package exports an entry, under the `workerd` condition, that imports `commp_bg.wasm` instead. Wrangler, `@cloudflare/vite-plugin` and `@cloudflare/vitest-plugin` pick it up and compile the `.wasm` ahead of time, so no configuration is needed.
+
 See the [repository README](https://github.com/hugomrdias/commp#readme) for the full API and benchmarks.
 
 ## License

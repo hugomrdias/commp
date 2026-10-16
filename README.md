@@ -65,10 +65,12 @@ commp/
 │   ├── commp-wasm/                  # @hugomrdias/commp-wasm - Rust WASM package
 │   │   ├── src/
 │   │   │   ├── index.js             # Main entry point
+│   │   │   ├── index.workerd.js     # Cloudflare Workers entry (imports the .wasm)
+│   │   │   ├── api.js               # Hashing API shared by both entries
 │   │   │   └── inline/              # Inline base64 WASM (generated, committed)
 │   │   ├── scripts/
 │   │   │   └── build-inline-wasm.js # Converts WASM to inline base64
-│   │   └── tests/                   # Vector and differential tests vs data-segment
+│   │   └── tests/                   # Vector, differential and workerd tests vs data-segment
 │   ├── commp-js/                    # @hugomrdias/commp-js - Pure JS package
 │   │   ├── src/
 │   │   └── tests/
@@ -112,7 +114,7 @@ The inline WASM in `packages/commp-wasm/src/inline` is committed, so the package
 pnpm build:wasm
 ```
 
-This runs `wasm-pack` on `rs/commp` and then embeds the binary as a base64 string for synchronous loading (no async init, works everywhere):
+This runs `wasm-pack` on `rs/commp` and then embeds the binary as a base64 string for synchronous loading (no async init, works everywhere). It also writes the raw `.wasm` and a Cloudflare Workers entry that imports it:
 
 ```text
 WASM binary size: 21889 bytes
@@ -120,11 +122,13 @@ Base64 size: 29188 chars
 Created: packages/commp-wasm/src/inline/commp_bg.wasm.js
 Created: packages/commp-wasm/src/inline/commp_bg.js
 Created: packages/commp-wasm/src/inline/commp.js
+Created: packages/commp-wasm/src/inline/commp_bg.wasm
+Created: packages/commp-wasm/src/inline/commp.workerd.js
 ```
 
 ## Usage
 
-Works in Node.js, browsers, Deno, and Bun with no async init required:
+Works in Node.js, browsers, Deno, Bun and Cloudflare Workers with no async init required:
 
 ```javascript
 import { create, root, digest } from "@hugomrdias/commp-wasm";
