@@ -13,6 +13,6 @@
     "@hugomrdias/commp-wasm": "workspace:*",
     "@web3-storage/data-segment": "catalog:",
     "playwright-test": "^15.0.1",
-    "tinybench": "^6.2.0"
+    "tinybench": "^6.2.3"
   }
 }

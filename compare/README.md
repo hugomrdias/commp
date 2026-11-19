@@ -49,14 +49,14 @@ noisy VMs, so treat their numbers as rough.
 `node compare/run.js [command] [options]`. Run `node compare/run.js --help`
 for the full list.
 
-| Command | |
-| --- | --- |
-| `all` (default) | build, verify, bench, memory |
-| `info` | machine info and the SHA-256 backend each variant picked |
-| `verify` | Lotus vectors plus a random sweep, on every variant |
-| `bench` | throughput and CPU cores used |
-| `memory` | peak RSS and heap allocations |
-| `report` | cross-machine `SUMMARY.md` |
+| Command         |                                                          |
+| --------------- | -------------------------------------------------------- |
+| `all` (default) | build, verify, bench, memory                             |
+| `info`          | machine info and the SHA-256 backend each variant picked |
+| `verify`        | Lotus vectors plus a random sweep, on every variant      |
+| `bench`         | throughput and CPU cores used                            |
+| `memory`        | peak RSS and heap allocations                            |
+| `report`        | cross-machine `SUMMARY.md`                               |
 
 Rerunning one command updates only its section of the machine's results file,
 as long as the code under test hasn't changed. Otherwise the file is replaced,
@@ -67,21 +67,21 @@ Useful options: `--variants rust,go`, `--sizes 32MiB,4GiB`, `--iters 5`,
 
 ## Variants
 
-| Variant | What runs | SHA-256 |
-| --- | --- | --- |
-| `rust` | `rs/commp` native, one thread | ARMv8 SHA2 (4 messages interleaved) / SHA-NI (2 interleaved) if the CPU has them, else SIMD with one message per lane: NEON (8), AVX-512 (16), AVX2 (8) or SSE2 (8) |
-| `rust-par` | same, with the `parallel` feature: large writes hashed on all cores | as `rust` |
-| `rust-soft` | same as `rust`, built with `--cfg sha2_backend="soft"` | SHA extensions off: NEON / AVX-512 / AVX2 / SSE2, one message per lane |
-| `rust-avx512`, `rust-avx2`, `rust-sse2` (amd64 only) | same as `rust`, built with `--cfg commp_backend="avx2"` etc.; skipped when the CPU lacks the feature | that backend |
-| `rust-portable` (opt-in) | same as `rust`, built with `--cfg commp_backend="portable"`: the code before the lane backends | sha2 crate, one message at a time (its own SHA-NI / ARMv8 SHA2 if the CPU has them, else portable) |
-| `rust-native` (opt-in) | same, built with `-C target-cpu=native` | as `rust` |
-| `go` | go-fil-commp-hashhash as released | sha256-simd: SHA-NI / ARMv8 SHA2, else hands off to `crypto/sha256` |
-| `go-1core` | same, `GOMAXPROCS=1` | as `go` |
-| `go-stdlib` | go-fil-commp-hashhash with sha256-simd swapped for `crypto/sha256` | SHA-NI, else AVX2, else generic (amd64); ARMv8 SHA2, else generic (arm64) |
-| `go-nosha` | `go-stdlib`, `GODEBUG=cpu.sha=off` (amd64) or `cpu.sha2=off` (arm64) | AVX2 or generic |
-| `go-nosha-1core` | same, `GOMAXPROCS=1` | as `go-nosha` |
-| `go-generic` (amd64 only) | `go-stdlib`, `GODEBUG=cpu.sha=off,cpu.avx2=off` | generic |
-| `wasm` | `@hugomrdias/commp-wasm` (the committed inline build) in Node | 4-lane SIMD128 in WASM, no hardware SHA |
+| Variant                                              | What runs                                                                                            | SHA-256                                                                                                                                                             |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rust`                                               | `rs/commp` native, one thread                                                                        | ARMv8 SHA2 (4 messages interleaved) / SHA-NI (2 interleaved) if the CPU has them, else SIMD with one message per lane: NEON (8), AVX-512 (16), AVX2 (8) or SSE2 (8) |
+| `rust-par`                                           | same, with the `parallel` feature: large writes hashed on all cores                                  | as `rust`                                                                                                                                                           |
+| `rust-soft`                                          | same as `rust`, built with `--cfg sha2_backend="soft"`                                               | SHA extensions off: NEON / AVX-512 / AVX2 / SSE2, one message per lane                                                                                              |
+| `rust-avx512`, `rust-avx2`, `rust-sse2` (amd64 only) | same as `rust`, built with `--cfg commp_backend="avx2"` etc.; skipped when the CPU lacks the feature | that backend                                                                                                                                                        |
+| `rust-portable` (opt-in)                             | same as `rust`, built with `--cfg commp_backend="portable"`: the code before the lane backends       | sha2 crate, one message at a time (its own SHA-NI / ARMv8 SHA2 if the CPU has them, else portable)                                                                  |
+| `rust-native` (opt-in)                               | same, built with `-C target-cpu=native`                                                              | as `rust`                                                                                                                                                           |
+| `go`                                                 | go-fil-commp-hashhash as released                                                                    | sha256-simd: SHA-NI / ARMv8 SHA2, else hands off to `crypto/sha256`                                                                                                 |
+| `go-1core`                                           | same, `GOMAXPROCS=1`                                                                                 | as `go`                                                                                                                                                             |
+| `go-stdlib`                                          | go-fil-commp-hashhash with sha256-simd swapped for `crypto/sha256`                                   | SHA-NI, else AVX2, else generic (amd64); ARMv8 SHA2, else generic (arm64)                                                                                           |
+| `go-nosha`                                           | `go-stdlib`, `GODEBUG=cpu.sha=off` (amd64) or `cpu.sha2=off` (arm64)                                 | AVX2 or generic                                                                                                                                                     |
+| `go-nosha-1core`                                     | same, `GOMAXPROCS=1`                                                                                 | as `go-nosha`                                                                                                                                                       |
+| `go-generic` (amd64 only)                            | `go-stdlib`, `GODEBUG=cpu.sha=off,cpu.avx2=off`                                                      | generic                                                                                                                                                             |
+| `wasm`                                               | `@hugomrdias/commp-wasm` (the committed inline build) in Node                                        | 4-lane SIMD128 in WASM, no hardware SHA                                                                                                                             |
 
 Every variant reports the backend it chose (the `SHA-256 backend` column), so a
 results file shows what each run actually used.
