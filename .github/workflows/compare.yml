@@ -14,7 +14,7 @@ on:
       variants:
         description: Comma-separated variants (empty for the default set)
         type: string
-        default: ''
+        default: ""
 
 permissions:
   contents: read

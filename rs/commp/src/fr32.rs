@@ -20,8 +20,8 @@ pub fn fr32_pad(source: &[u8], output: &mut [u8; OUT_BYTES_PER_QUAD]) {
     // The 128th source byte is past the quad: zero, so the last output
     // byte is only the top 6 bits of source[126]
     let mut limbs = [0u64; 16];
-    for (limb, bytes) in limbs.iter_mut().zip(source.chunks_exact(8)) {
-        *limb = u64::from_le_bytes(bytes.try_into().unwrap());
+    for (limb, bytes) in limbs.iter_mut().zip(source.as_chunks::<8>().0) {
+        *limb = u64::from_le_bytes(*bytes);
     }
     let mut last = [0u8; 8];
     last[..7].copy_from_slice(&source[120..]);
@@ -38,8 +38,8 @@ pub fn fr32_pad(source: &[u8], output: &mut [u8; OUT_BYTES_PER_QUAD]) {
         out[4 * k + 3] &= LIMB_MASK;
     }
 
-    for (bytes, limb) in output.chunks_exact_mut(8).zip(out) {
-        bytes.copy_from_slice(&limb.to_le_bytes());
+    for (bytes, limb) in output.as_chunks_mut::<8>().0.iter_mut().zip(out) {
+        *bytes = limb.to_le_bytes();
     }
 }
 

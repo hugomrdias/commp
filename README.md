@@ -10,22 +10,22 @@ Up to **~15x faster** than the original JavaScript implementation in Node (**~11
 
 Node 26, Apple Silicon, 1 MiB streaming (`pnpm bench`):
 
-| Implementation | MiB/s | Speedup |
-|---|---|---|
-| Original JS (`@web3-storage/data-segment`) | 11.8 | 1.00x |
-| Pure JS (`@hugomrdias/commp-js`) | 46.1 | 3.91x |
-| **Rust WASM (inline base64)** | **181.2** | **15.38x** |
+| Implementation                             | MiB/s     | Speedup    |
+| ------------------------------------------ | --------- | ---------- |
+| Original JS (`@web3-storage/data-segment`) | 11.8      | 1.00x      |
+| Pure JS (`@hugomrdias/commp-js`)           | 46.1      | 3.91x      |
+| **Rust WASM (inline base64)**              | **181.2** | **15.38x** |
 
 ### Browsers
 
 Apple Silicon, 1 MiB streaming, via [playwright-test](https://github.com/hugomrdias/playwright-test) (`pnpm bench:browser --browser <name>`):
 
-| Implementation | Chromium 153 | Firefox 155 | WebKit (Safari 26.6) |
-| --- | --- | --- | --- |
-| Original JS (`@web3-storage/data-segment`) | 7.5 | 5.0 | 16.5 |
-| Pure JS (`@hugomrdias/commp-js`) | 45.6 | 37.4 | 38.1 |
-| **Rust WASM (inline base64)** | **185.6** | **170.7** | **187.3** |
-| WASM speedup vs original | 24.8x | 34.2x | 11.3x |
+| Implementation                             | Chromium 153 | Firefox 155 | WebKit (Safari 26.6) |
+| ------------------------------------------ | ------------ | ----------- | -------------------- |
+| Original JS (`@web3-storage/data-segment`) | 7.5          | 5.0         | 16.5                 |
+| Pure JS (`@hugomrdias/commp-js`)           | 45.6         | 37.4        | 38.1                 |
+| **Rust WASM (inline base64)**              | **185.6**    | **170.7**   | **187.3**            |
+| WASM speedup vs original                   | 24.8x        | 34.2x       | 11.3x                |
 
 ### Native and Go
 
@@ -38,21 +38,21 @@ writes one results file per machine (`pnpm compare`).
 
 ```javascript
 // Just import and use - no async init needed!
-import { create, root, digest } from "@hugomrdias/commp-wasm";
+import { create, root, digest } from '@hugomrdias/commp-wasm'
 
 // One-shot API - just get the 32-byte root
-const data = new Uint8Array(1024 * 1024).fill(0x42);
-const rootHash = root(data); // 32-byte Uint8Array
+const data = new Uint8Array(1024 * 1024).fill(0x42)
+const rootHash = root(data) // 32-byte Uint8Array
 
 // Streaming API - for large files or chunked data
-const hasher = create();
-hasher.write(chunk1);
-hasher.write(chunk2);
-const result = hasher.digest();
-console.log(result.root);    // 32-byte root hash
-console.log(result.height);  // tree height
-console.log(result.padding); // zero-padding added
-hasher.free(); // Free WASM memory when done
+const hasher = create()
+hasher.write(chunk1)
+hasher.write(chunk2)
+const result = hasher.digest()
+console.log(result.root) // 32-byte root hash
+console.log(result.height) // tree height
+console.log(result.padding) // zero-padding added
+hasher.free() // Free WASM memory when done
 ```
 
 ## Project Structure
@@ -131,25 +131,25 @@ Created: packages/commp-wasm/src/inline/commp.workerd.js
 Works in Node.js, browsers, Deno, Bun and Cloudflare Workers with no async init required:
 
 ```javascript
-import { create, root, digest } from "@hugomrdias/commp-wasm";
+import { create, root, digest } from '@hugomrdias/commp-wasm'
 
 // One-shot: just get the 32-byte root
-const data = new Uint8Array(1024 * 1024);
-const rootHash = root(data);
+const data = new Uint8Array(1024 * 1024)
+const rootHash = root(data)
 
 // One-shot: get full multihash digest (with metadata)
-const result = digest(data);
-console.log(result.root);    // 32-byte root hash
-console.log(result.height);  // tree height
-console.log(result.padding); // zero-padding added
+const result = digest(data)
+console.log(result.root) // 32-byte root hash
+console.log(result.height) // tree height
+console.log(result.padding) // zero-padding added
 
 // Streaming: for large files
-const hasher = create();
+const hasher = create()
 for (const chunk of chunks) {
-  hasher.write(chunk);
+  hasher.write(chunk)
 }
-const streamResult = hasher.digest();
-hasher.free();
+const streamResult = hasher.digest()
+hasher.free()
 ```
 
 ## API Reference
@@ -164,15 +164,15 @@ Use when you only need the hash itself, e.g., for comparisons or storage.
 
 Returns a `PieceDigest` object with:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `code` | `number` | `0x1011` - multihash identifier |
-| `name` | `string` | `"fr32-sha2-256-trunc254-padded-binary-tree"` |
-| `bytes` | `Uint8Array` | Full multihash-encoded digest |
-| `digest` | `Uint8Array` | Digest payload (padding + height + root) |
-| `root` | `Uint8Array` | 32-byte Merkle root |
-| `height` | `number` | Tree height (log₂ of piece size ÷ 32) |
-| `padding` | `number` | Zero-padding bytes added |
+| Field     | Type         | Description                                   |
+| --------- | ------------ | --------------------------------------------- |
+| `code`    | `number`     | `0x1011` - multihash identifier               |
+| `name`    | `string`     | `"fr32-sha2-256-trunc254-padded-binary-tree"` |
+| `bytes`   | `Uint8Array` | Full multihash-encoded digest                 |
+| `digest`  | `Uint8Array` | Digest payload (padding + height + root)      |
+| `root`    | `Uint8Array` | 32-byte Merkle root                           |
+| `height`  | `number`     | Tree height (log₂ of piece size ÷ 32)         |
+| `padding` | `number`     | Zero-padding bytes added                      |
 
 ### `create(): Hasher`
 
