@@ -200,8 +200,8 @@ importers:
         specifier: 2.6.8
         version: 2.6.8
       '@hugomrdias/configs':
-        specifier: 1.1.3
-        version: 1.1.3(@biomejs/biome@2.6.8)
+        specifier: 2.0.0
+        version: 2.0.0(@biomejs/biome@2.6.8)
       node:
         specifier: runtime:26.13.1
         version: runtime:26.13.1
@@ -712,10 +712,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@hugomrdias/configs@1.1.3':
-    resolution: {integrity: sha512-w/X4+IIEB8s3io6NBh0Wsshh7ipNkYZjKuGd3f1SCYnQvvoVZ8b+mYU7pg7ylQF1u6frM9jvgdozoLTh9dFXEA==}
+  '@hugomrdias/configs@2.0.0':
+    resolution: {integrity: sha512-hx/m01DeDg7UQfC7EcrdMXdfbZn+2Lg3kLdYNo9Ev+G71i7KcbyL3hl1VEBhc4nZdDo3M4CTQJ4FQd597zG9Dg==}
     peerDependencies:
-      '@biomejs/biome': ^2.1.2
+      '@biomejs/biome': ^2.5.0
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2706,7 +2706,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@hugomrdias/configs@1.1.3(@biomejs/biome@2.6.8)':
+  '@hugomrdias/configs@2.0.0(@biomejs/biome@2.6.8)':
     dependencies:
       '@biomejs/biome': 2.6.8
 
