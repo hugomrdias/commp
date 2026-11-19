@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.5](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.4...commp-wasm-v0.1.5) (2026-11-19)
+
+
+### Bug Fixes
+
+* deprecate MIN_PAYLOAD_SIZE and test FRC-0069 vectors ([#48](https://github.com/hugomrdias/commp/issues/48)) ([9842736](https://github.com/hugomrdias/commp/commit/9842736365ce2d82e1e0e2e68dd3a8e20d25d91a))
+
+
+### Performance Improvements
+
+* **commp-wasm:** FR32-pad with 64-bit limb shifts ([#43](https://github.com/hugomrdias/commp/issues/43)) ([7a04473](https://github.com/hugomrdias/commp/commit/7a044732c6db69e066afe681f3d778afbae66382))
+
 ## [0.1.4](https://github.com/hugomrdias/commp/compare/commp-wasm-v0.1.3...commp-wasm-v0.1.4) (2026-10-16)
 
 
