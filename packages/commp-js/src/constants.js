@@ -35,11 +35,14 @@ export const FR_RATIO = IN_BITS_FR / OUT_BITS_FR
 export const LEAVES_PER_QUAD = 2
 
 /**
- * The smallest amount of data for which FR32 padding has a defined result.
- * Silently upgrading 2 leaves to 4 would break the symmetry so we require
- * an extra byte and the rest can be 0 padded to expand to 4 leaves.
+ * The smallest payload accepted, in bytes. Payloads shorter than 127 bytes,
+ * including empty ones, are zero-padded to 127 bytes, a 128 byte piece, as
+ * FRC-0069 specifies.
+ *
+ * @deprecated Every payload size is accepted, so this is always 0.
+ * @see https://github.com/filecoin-project/FIPs/blob/master/FRCs/frc-0069.md
  */
-export const MIN_PAYLOAD_SIZE = 2 * NODE_SIZE + 1
+export const MIN_PAYLOAD_SIZE = 0
 
 /**
  * Multihash code for fr32-sha2-256-trunc254-padded-binary-tree
