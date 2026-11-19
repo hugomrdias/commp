@@ -210,7 +210,16 @@ export function root(payload) {
 // Re-export constants
 export const NODE_SIZE = 32
 export const IN_BYTES_PER_QUAD = 127
-export const MIN_PAYLOAD_SIZE = 65
+
+/**
+ * The smallest payload accepted, in bytes. Payloads shorter than 127 bytes,
+ * including empty ones, are zero-padded to 127 bytes, a 128 byte piece, as
+ * FRC-0069 specifies.
+ *
+ * @deprecated Every payload size is accepted, so this is always 0.
+ * @see https://github.com/filecoin-project/FIPs/blob/master/FRCs/frc-0069.md
+ */
+export const MIN_PAYLOAD_SIZE = 0
 
 /**
  * Largest payload accepted, in bytes: 127 * 2^47 (~15.9 PiB)
