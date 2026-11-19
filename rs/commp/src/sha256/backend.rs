@@ -78,7 +78,10 @@ impl Backend {
                     && std::arch::is_x86_feature_detected!("sse4.1")
             }
             #[cfg(target_arch = "x86_64")]
-            Backend::Avx512 => std::arch::is_x86_feature_detected!("avx512f"),
+            // Its transposes in and out use AVX2
+            Backend::Avx512 => {
+                std::arch::is_x86_feature_detected!("avx512f") && std::arch::is_x86_feature_detected!("avx2")
+            }
             #[cfg(target_arch = "x86_64")]
             Backend::Avx2 => std::arch::is_x86_feature_detected!("avx2"),
             // Part of every x86_64 target

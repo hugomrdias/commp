@@ -5,6 +5,7 @@
 //! rounds are generic over [`Vector`]; each backend is a few intrinsics.
 
 use super::{truncated_hash_64, IV, K, NODE_SIZE, PAD_KW};
+use core::mem::MaybeUninit;
 
 /// Most lanes of any [`Vector`], which sizes the transpose buffers
 const MAX_LANES: usize = 16;
@@ -194,22 +195,26 @@ unsafe fn hash_many<V: Vector>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
     // A short last group of 2 or more is zero-padded and hashed in the
     // same loop, from these buffers: one call site, so the unrolled rounds
     // are inlined once. A lone message is cheaper scalar.
+    // They stay uninitialised (and unread) otherwise, so that calls with
+    // whole groups only don't zero 1.5 KiB.
     let padded = rest > 1;
-    let mut pad_msgs = [[0u8; 64]; MAX_LANES];
-    let mut pad_out = [[0u8; NODE_SIZE]; MAX_LANES];
+    let mut pad_msgs = MaybeUninit::<[[u8; 64]; MAX_LANES]>::uninit();
+    let mut pad_out = MaybeUninit::<[[u8; NODE_SIZE]; MAX_LANES]>::uninit();
     if padded {
-        pad_msgs[..rest].copy_from_slice(&msgs[groups * lanes..]);
+        pad_msgs.write([[0u8; 64]; MAX_LANES])[..rest].copy_from_slice(&msgs[groups * lanes..]);
+        pad_out.write([[0u8; NODE_SIZE]; MAX_LANES]);
     }
     for g in 0..groups + padded as usize {
         let (src, dst) = if g < groups {
             (&msgs[g * lanes..][..lanes], &mut out[g * lanes..][..lanes])
         } else {
-            (&pad_msgs[..lanes], &mut pad_out[..lanes])
+            // SAFETY: both were written above, as `padded` holds here
+            (&pad_msgs.assume_init_ref()[..lanes], &mut pad_out.assume_init_mut()[..lanes])
         };
         hash_group::<V>(src, dst);
     }
     if padded {
-        out[groups * lanes..].copy_from_slice(&pad_out[..rest]);
+        out[groups * lanes..].copy_from_slice(&pad_out.assume_init_ref()[..rest]);
     } else if rest == 1 {
         out[groups * lanes] = truncated_hash_64(&msgs[groups * lanes]);
     }
