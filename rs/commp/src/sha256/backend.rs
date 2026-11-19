@@ -28,12 +28,12 @@ enum Backend {
 }
 
 impl Backend {
-    /// Fastest first. SHA-NI stays ahead of AVX-512 until measured otherwise
-    /// on a CPU that has both.
+    /// Fastest first. On CPUs with both, 16 AVX-512 lanes matched SHA-NI on
+    /// Zen 4 and beat it on Zen 5 (+45%) and Tiger Lake.
     const PREFERENCE: [Backend; 7] = [
         Backend::ArmSha2,
-        Backend::ShaNi,
         Backend::Avx512,
+        Backend::ShaNi,
         Backend::Avx2,
         Backend::Sse2,
         Backend::Neon,
