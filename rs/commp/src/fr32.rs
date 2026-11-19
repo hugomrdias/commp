@@ -65,7 +65,7 @@ mod tests {
         let input = [0x42u8; IN_BYTES_PER_QUAD];
         let mut output = [0u8; OUT_BYTES_PER_QUAD];
         fr32_pad(&input, &mut output);
-        
+
         assert_eq!(output.len(), 128);
         assert_eq!(output[31] & 0b11000000, 0);
         assert_eq!(output[63] & 0b11000000, 0);
@@ -93,7 +93,8 @@ mod tests {
     #[test]
     fn test_fr32_pad_matches_bytes() {
         let mut state = 0x9e3779b97f4a7c15u64;
-        let mut quads: Vec<[u8; IN_BYTES_PER_QUAD]> = vec![[0x00; IN_BYTES_PER_QUAD], [0xff; IN_BYTES_PER_QUAD]];
+        let mut quads: Vec<[u8; IN_BYTES_PER_QUAD]> =
+            vec![[0x00; IN_BYTES_PER_QUAD], [0xff; IN_BYTES_PER_QUAD]];
         for _ in 0..1000 {
             quads.push(core::array::from_fn(|_| {
                 state ^= state << 13;

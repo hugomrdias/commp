@@ -1,8 +1,8 @@
 //! Picks the SHA-256 code for native targets from the build and the CPU
 
-use super::hash_many_portable;
 #[cfg(target_arch = "aarch64")]
 use super::arm;
+use super::hash_many_portable;
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 use super::lanes;
 #[cfg(target_arch = "x86_64")]
@@ -80,7 +80,8 @@ impl Backend {
             #[cfg(target_arch = "x86_64")]
             // Its transposes in and out use AVX2
             Backend::Avx512 => {
-                std::arch::is_x86_feature_detected!("avx512f") && std::arch::is_x86_feature_detected!("avx2")
+                std::arch::is_x86_feature_detected!("avx512f")
+                    && std::arch::is_x86_feature_detected!("avx2")
             }
             #[cfg(target_arch = "x86_64")]
             Backend::Avx2 => std::arch::is_x86_feature_detected!("avx2"),
@@ -98,7 +99,10 @@ impl Backend {
     fn get() -> Backend {
         match Backend::FORCED {
             Some(forced) if forced.supported() => forced,
-            _ => Backend::PREFERENCE.into_iter().find(|b| b.supported()).unwrap_or(Backend::Portable),
+            _ => Backend::PREFERENCE
+                .into_iter()
+                .find(|b| b.supported())
+                .unwrap_or(Backend::Portable),
         }
     }
 

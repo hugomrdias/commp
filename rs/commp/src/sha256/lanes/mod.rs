@@ -97,14 +97,38 @@ macro_rules! round {
 macro_rules! rounds8 {
     ($s:ident, $i:expr, |$j:ident| $kw:expr) => {{
         let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = $s;
-        round!(a, b, c, d, e, f, g, h, { let $j: usize = $i; $kw });
-        round!(h, a, b, c, d, e, f, g, { let $j: usize = $i + 1; $kw });
-        round!(g, h, a, b, c, d, e, f, { let $j: usize = $i + 2; $kw });
-        round!(f, g, h, a, b, c, d, e, { let $j: usize = $i + 3; $kw });
-        round!(e, f, g, h, a, b, c, d, { let $j: usize = $i + 4; $kw });
-        round!(d, e, f, g, h, a, b, c, { let $j: usize = $i + 5; $kw });
-        round!(c, d, e, f, g, h, a, b, { let $j: usize = $i + 6; $kw });
-        round!(b, c, d, e, f, g, h, a, { let $j: usize = $i + 7; $kw });
+        round!(a, b, c, d, e, f, g, h, {
+            let $j: usize = $i;
+            $kw
+        });
+        round!(h, a, b, c, d, e, f, g, {
+            let $j: usize = $i + 1;
+            $kw
+        });
+        round!(g, h, a, b, c, d, e, f, {
+            let $j: usize = $i + 2;
+            $kw
+        });
+        round!(f, g, h, a, b, c, d, e, {
+            let $j: usize = $i + 3;
+            $kw
+        });
+        round!(e, f, g, h, a, b, c, d, {
+            let $j: usize = $i + 4;
+            $kw
+        });
+        round!(d, e, f, g, h, a, b, c, {
+            let $j: usize = $i + 5;
+            $kw
+        });
+        round!(c, d, e, f, g, h, a, b, {
+            let $j: usize = $i + 6;
+            $kw
+        });
+        round!(b, c, d, e, f, g, h, a, {
+            let $j: usize = $i + 7;
+            $kw
+        });
         $s = [a, b, c, d, e, f, g, h];
     }};
 }
@@ -209,7 +233,10 @@ unsafe fn hash_many<V: Vector>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
             (&msgs[g * lanes..][..lanes], &mut out[g * lanes..][..lanes])
         } else {
             // SAFETY: both were written above, as `padded` holds here
-            (&pad_msgs.assume_init_ref()[..lanes], &mut pad_out.assume_init_mut()[..lanes])
+            (
+                &pad_msgs.assume_init_ref()[..lanes],
+                &mut pad_out.assume_init_mut()[..lanes],
+            )
         };
         hash_group::<V>(src, dst);
     }
@@ -279,12 +306,12 @@ impl<V: Vector> Vector for Pair<V> {
     }
 }
 
-#[cfg(target_arch = "aarch64")]
-mod neon;
-#[cfg(target_arch = "x86_64")]
-mod avx512;
 #[cfg(target_arch = "x86_64")]
 mod avx2;
+#[cfg(target_arch = "x86_64")]
+mod avx512;
+#[cfg(target_arch = "aarch64")]
+mod neon;
 #[cfg(target_arch = "x86_64")]
 mod sse2;
 
@@ -322,7 +349,9 @@ mod tests {
     #[test]
     fn test_lanes_match_sha2() {
         let msgs: Vec<[u8; 64]> = (0..37u32)
-            .map(|i| core::array::from_fn(|b| (i as u8).wrapping_mul(31) ^ (b as u8).wrapping_mul(7)))
+            .map(|i| {
+                core::array::from_fn(|b| (i as u8).wrapping_mul(31) ^ (b as u8).wrapping_mul(7))
+            })
             .collect();
         let expected: Vec<[u8; NODE_SIZE]> = msgs.iter().map(truncated_hash_64).collect();
 

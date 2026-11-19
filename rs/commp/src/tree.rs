@@ -7,7 +7,8 @@ use crate::{BATCH_LEAVES, MAX_LEVEL, NODE_SIZE};
 /// Pre-computed zero commitment nodes for each level (lazily initialized)
 pub fn get_zero_comm(level: usize) -> [u8; NODE_SIZE] {
     #[cfg(not(target_arch = "wasm32"))]
-    static ZERO_COMMS: std::sync::OnceLock<[[u8; NODE_SIZE]; MAX_LEVEL]> = std::sync::OnceLock::new();
+    static ZERO_COMMS: std::sync::OnceLock<[[u8; NODE_SIZE]; MAX_LEVEL]> =
+        std::sync::OnceLock::new();
     #[cfg(target_arch = "wasm32")]
     static ZERO_COMMS: SingleThreaded<core::cell::OnceCell<[[u8; NODE_SIZE]; MAX_LEVEL]>> =
         SingleThreaded(core::cell::OnceCell::new());
@@ -15,7 +16,7 @@ pub fn get_zero_comm(level: usize) -> [u8; NODE_SIZE] {
     ZERO_COMMS.get_or_init(|| {
         let mut comms = [[0u8; NODE_SIZE]; MAX_LEVEL];
         let mut concat = [0u8; NODE_SIZE * 2];
-        
+
         for i in 1..MAX_LEVEL {
             concat[..NODE_SIZE].copy_from_slice(&comms[i - 1]);
             concat[NODE_SIZE..].copy_from_slice(&comms[i - 1]);
@@ -53,7 +54,12 @@ fn as_pairs(nodes: &[[u8; NODE_SIZE]]) -> &[[u8; 64]] {
 /// trailing node with a zero commitment. The result is left at the start of
 /// `nodes`; returns the remaining count.
 #[inline(never)]
-pub fn reduce(nodes: &mut [[u8; NODE_SIZE]], mut len: usize, mut height: usize, steps: usize) -> usize {
+pub fn reduce(
+    nodes: &mut [[u8; NODE_SIZE]],
+    mut len: usize,
+    mut height: usize,
+    steps: usize,
+) -> usize {
     let mut next = [[0u8; NODE_SIZE]; BATCH_LEAVES / 2];
     for _ in 0..steps {
         if len % 2 == 1 {
@@ -70,7 +76,11 @@ pub fn reduce(nodes: &mut [[u8; NODE_SIZE]], mut len: usize, mut height: usize, 
 
 /// Compute parent node from two children using a pre-allocated buffer
 #[inline(always)]
-pub fn compute_node_into(left: &[u8; NODE_SIZE], right: &[u8; NODE_SIZE], concat: &mut [u8; 64]) -> [u8; NODE_SIZE] {
+pub fn compute_node_into(
+    left: &[u8; NODE_SIZE],
+    right: &[u8; NODE_SIZE],
+    concat: &mut [u8; 64],
+) -> [u8; NODE_SIZE] {
     concat[..NODE_SIZE].copy_from_slice(left);
     concat[NODE_SIZE..].copy_from_slice(right);
     truncated_hash_64(concat)
@@ -130,7 +140,8 @@ impl Stack {
         // pairing it with a pending left sibling or a zero commitment
         let mut concat = [0u8; 64];
         let lowest = n.trailing_zeros() as usize;
-        let mut acc = compute_node_into(&self.nodes[lowest], &get_zero_comm(lowest + 1), &mut concat);
+        let mut acc =
+            compute_node_into(&self.nodes[lowest], &get_zero_comm(lowest + 1), &mut concat);
         for (level, node) in self.nodes[..top].iter().enumerate().skip(lowest + 1) {
             acc = if n >> level & 1 == 1 {
                 compute_node_into(node, &acc, &mut concat)
@@ -139,7 +150,10 @@ impl Stack {
             };
         }
 
-        ((top + 2) as u8, compute_node_into(&self.nodes[top], &acc, &mut concat))
+        (
+            (top + 2) as u8,
+            compute_node_into(&self.nodes[top], &acc, &mut concat),
+        )
     }
 }
 

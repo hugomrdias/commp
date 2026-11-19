@@ -43,6 +43,9 @@ impl super::Vector for Sse2 {
     }
     #[inline(always)]
     unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
-        Sse2(_mm_or_si128(_mm_srli_epi32::<R>(self.0), _mm_slli_epi32::<L>(self.0)))
+        Sse2(_mm_or_si128(
+            _mm_srli_epi32::<R>(self.0),
+            _mm_slli_epi32::<L>(self.0),
+        ))
     }
 }

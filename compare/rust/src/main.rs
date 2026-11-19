@@ -51,7 +51,10 @@ fn main() {
         Some("info") => println!("{{{}}}", info()),
         Some("hash") => {
             let mut out = io::stdout().lock();
-            let result = hash_reader(&mut BufReader::with_capacity(1 << 20, io::stdin().lock()), None);
+            let result = hash_reader(
+                &mut BufReader::with_capacity(1 << 20, io::stdin().lock()),
+                None,
+            );
             write_result(&mut out, result);
         }
         Some("frames") => frames(),
