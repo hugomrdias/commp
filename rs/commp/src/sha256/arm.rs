@@ -16,7 +16,7 @@ const LANES: usize = 4;
 /// lane)` may extend that lane's message schedule
 macro_rules! rounds {
     ($abcd:ident, $efgh:ident, $n:expr, |$g:ident, $l:ident| $kw:expr, $update:expr) => {
-        for $g in 0..16 {
+        unroll16!(|$g| {
             for $l in 0..$n {
                 let kw = $kw;
                 let abcd = $abcd[$l];
@@ -24,7 +24,7 @@ macro_rules! rounds {
                 $efgh[$l] = vsha256h2q_u32($efgh[$l], abcd, kw);
                 $update;
             }
-        }
+        });
     };
 }
 
@@ -47,10 +47,12 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
     });
 
     // Second block: the padding, whose K + W is precomputed
-    let mid: [[uint32x4_t; 2]; N] =
-        core::array::from_fn(|l| [vaddq_u32(abcd[l], iv[0]), vaddq_u32(efgh[l], iv[1])]);
-    let mut abcd: [uint32x4_t; N] = core::array::from_fn(|l| mid[l][0]);
-    let mut efgh: [uint32x4_t; N] = core::array::from_fn(|l| mid[l][1]);
+    let mut mid = [[iv[0]; 2]; N];
+    for l in 0..N {
+        abcd[l] = vaddq_u32(abcd[l], iv[0]);
+        efgh[l] = vaddq_u32(efgh[l], iv[1]);
+        mid[l] = [abcd[l], efgh[l]];
+    }
     rounds!(abcd, efgh, N, |g, l| vld1q_u32(PAD_KW.as_ptr().add(4 * g)), {});
 
     for l in 0..N {

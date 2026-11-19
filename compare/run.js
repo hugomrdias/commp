@@ -149,7 +149,7 @@ const VARIANTS = [
     optIn: true,
   },
   ...(goArch === 'amd64'
-    ? ['avx512', 'avx2', 'sse2'].map(
+    ? ['sha-ni', 'avx512', 'avx2', 'sse2'].map(
         (backend) =>
           /** @type {Variant} */ ({
             id: `rust-${backend}`,
@@ -237,7 +237,7 @@ const builds = {
   'rust-native': rustBuild('rust-native', '-C target-cpu=native'),
   'rust-portable': rustBuild('rust-portable', '--cfg commp_backend="portable"'),
   ...Object.fromEntries(
-    ['avx512', 'avx2', 'sse2'].map((b) => [
+    ['sha-ni', 'avx512', 'avx2', 'sse2'].map((b) => [
       `rust-${b}`,
       rustBuild(`rust-${b}`, `--cfg commp_backend="${b}"`),
     ])

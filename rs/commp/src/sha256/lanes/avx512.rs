@@ -1,5 +1,8 @@
-//! AVX-512: 16 lanes, with real rotates and `vpternlogd`
+//! AVX-512: 16 lanes, with real rotates and `vpternlogd`; transposes in
+//! and out reuse AVX2's on each half
 
+use super::avx2::{load_half, store8};
+use super::NODE_SIZE;
 use core::arch::x86_64::*;
 
 #[derive(Clone, Copy)]
@@ -57,5 +60,29 @@ impl super::Vector for Avx512 {
     #[inline(always)]
     unsafe fn maj(a: Self, b: Self, c: Self) -> Self {
         Avx512(_mm512_ternarylogic_epi32::<0xe8>(a.0, b.0, c.0))
+    }
+    /// Messages 0-7 and 8-15 transposed as two AVX2 halves, then joined
+    #[inline(always)]
+    unsafe fn load_messages(msgs: &[[u8; 64]]) -> [Self; 16] {
+        let mut w = [Avx512(_mm512_setzero_si512()); 16];
+        for half in 0..2 {
+            let lo = load_half(&msgs[..8], half);
+            let hi = load_half(&msgs[8..], half);
+            for j in 0..8 {
+                w[8 * half + j] = Avx512(_mm512_inserti64x4::<1>(_mm512_castsi256_si512(lo[j]), hi[j]));
+            }
+        }
+        w
+    }
+    #[inline(always)]
+    unsafe fn store_nodes(s: [Self; 8], out: &mut [[u8; NODE_SIZE]]) {
+        let mut lo = [_mm256_setzero_si256(); 8];
+        let mut hi = [_mm256_setzero_si256(); 8];
+        for k in 0..8 {
+            lo[k] = _mm512_castsi512_si256(s[k].0);
+            hi[k] = _mm512_extracti64x4_epi64::<1>(s[k].0);
+        }
+        store8(lo, &mut out[..8]);
+        store8(hi, &mut out[8..]);
     }
 }

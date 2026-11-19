@@ -7,6 +7,8 @@ pub struct Sse2(__m128i);
 
 impl super::Vector for Sse2 {
     const LANES: usize = 4;
+    // ~15k instructions unrolled (as a `Pair`), past L1i: measured slower than the loop
+    const UNROLL: bool = false;
     #[inline(always)]
     unsafe fn splat(x: u32) -> Self {
         Sse2(_mm_set1_epi32(x as i32))
