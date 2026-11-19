@@ -87,12 +87,12 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
 #[target_feature(enable = "sha,ssse3,sse4.1")]
 pub unsafe fn hash_many(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
     let out = &mut out[..msgs.len()];
-    let mut msg_groups = msgs.chunks_exact(LANES);
-    let mut out_groups = out.chunks_exact_mut(LANES);
-    for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
+    let (msg_groups, msg_rest) = msgs.as_chunks::<LANES>();
+    let (out_groups, out_rest) = out.as_chunks_mut::<LANES>();
+    for (m, o) in msg_groups.iter().zip(out_groups) {
         hash_lanes::<LANES>(m, o);
     }
-    for (m, o) in msg_groups.remainder().iter().zip(out_groups.into_remainder()) {
+    for (m, o) in msg_rest.iter().zip(out_rest) {
         hash_lanes::<1>(core::slice::from_ref(m), core::slice::from_mut(o));
     }
 }

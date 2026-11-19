@@ -216,11 +216,11 @@ fn hash_buffer(buf: &[u8], size: u64, chunk: usize) -> ([u8; 32], u64) {
 fn xorshift_buffer(size: usize) -> Vec<u8> {
     let mut buf = vec![0u8; size.next_multiple_of(4)];
     let mut x: u32 = 0x9E3779B9;
-    for word in buf.chunks_exact_mut(4) {
+    for word in buf.as_chunks_mut::<4>().0 {
         x ^= x << 13;
         x ^= x >> 17;
         x ^= x << 5;
-        word.copy_from_slice(&x.to_le_bytes());
+        *word = x.to_le_bytes();
     }
     buf.truncate(size);
     buf

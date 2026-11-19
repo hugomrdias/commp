@@ -134,14 +134,14 @@ fn hash4(msgs: &[[u8; 64]; 4], out: &mut [[u8; NODE_SIZE]; 4]) {
 
 /// Hash many 64-byte messages into truncated nodes, 4 at a time
 pub fn hash_many(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
-    let mut msg_groups = msgs.chunks_exact(4);
-    let mut out_groups = out[..msgs.len()].chunks_exact_mut(4);
-    for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
-        hash4(m.try_into().unwrap(), o.try_into().unwrap());
+    let (msg_groups, msg_rest) = msgs.as_chunks::<4>();
+    let (out_groups, out_rest) = out[..msgs.len()].as_chunks_mut::<4>();
+    for (m, o) in msg_groups.iter().zip(out_groups) {
+        hash4(m, o);
     }
     // A lone message is cheaper scalar; 2 or 3 share one padded group,
     // hashed by recursing so `hash4` is only inlined into the loop above
-    match (msg_groups.remainder(), out_groups.into_remainder()) {
+    match (msg_rest, out_rest) {
         ([], _) => {}
         ([msg], [node]) => *node = truncated_hash_64(msg),
         (rest, nodes) => {

@@ -151,7 +151,7 @@ impl CommPHasher {
             .zip(input[..count * BATCH_BYTES].par_chunks_exact(BATCH_BYTES))
             .for_each(|(root, batch)| {
                 let mut padded = [[0u8; OUT_BYTES_PER_QUAD]; BATCH_QUADS];
-                for (quad, out) in batch.chunks_exact(IN_BYTES_PER_QUAD).zip(&mut padded) {
+                for (quad, out) in batch.as_chunks::<IN_BYTES_PER_QUAD>().0.iter().zip(&mut padded) {
                     fr32_pad(quad, out);
                 }
                 *root = batch_root(&padded);
