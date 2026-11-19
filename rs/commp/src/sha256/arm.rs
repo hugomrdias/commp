@@ -35,16 +35,24 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
     // w[lane][j] holds schedule words 4j..4j+4, overwritten in place by
     // the words 16 later
     let mut w: [[uint32x4_t; 4]; N] = core::array::from_fn(|l| {
-        core::array::from_fn(|j| vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(msgs[l].as_ptr().add(16 * j)))))
+        core::array::from_fn(|j| {
+            vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(msgs[l].as_ptr().add(16 * j))))
+        })
     });
     let mut abcd = [iv[0]; N];
     let mut efgh = [iv[1]; N];
-    rounds!(abcd, efgh, N, |g, l| vaddq_u32(w[l][g % 4], vld1q_u32(K.as_ptr().add(4 * g))), {
-        if g < 12 {
-            let next = vsha256su0q_u32(w[l][g % 4], w[l][(g + 1) % 4]);
-            w[l][g % 4] = vsha256su1q_u32(next, w[l][(g + 2) % 4], w[l][(g + 3) % 4]);
+    rounds!(
+        abcd,
+        efgh,
+        N,
+        |g, l| vaddq_u32(w[l][g % 4], vld1q_u32(K.as_ptr().add(4 * g))),
+        {
+            if g < 12 {
+                let next = vsha256su0q_u32(w[l][g % 4], w[l][(g + 1) % 4]);
+                w[l][g % 4] = vsha256su1q_u32(next, w[l][(g + 2) % 4], w[l][(g + 3) % 4]);
+            }
         }
-    });
+    );
 
     // Second block: the padding, whose K + W is precomputed
     let mut mid = [[iv[0]; 2]; N];
@@ -53,12 +61,24 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
         efgh[l] = vaddq_u32(efgh[l], iv[1]);
         mid[l] = [abcd[l], efgh[l]];
     }
-    rounds!(abcd, efgh, N, |g, l| vld1q_u32(PAD_KW.as_ptr().add(4 * g)), {});
+    rounds!(
+        abcd,
+        efgh,
+        N,
+        |g, l| vld1q_u32(PAD_KW.as_ptr().add(4 * g)),
+        {}
+    );
 
     for l in 0..N {
         let node = out[l].as_mut_ptr();
-        vst1q_u8(node, vrev32q_u8(vreinterpretq_u8_u32(vaddq_u32(abcd[l], mid[l][0]))));
-        vst1q_u8(node.add(16), vrev32q_u8(vreinterpretq_u8_u32(vaddq_u32(efgh[l], mid[l][1]))));
+        vst1q_u8(
+            node,
+            vrev32q_u8(vreinterpretq_u8_u32(vaddq_u32(abcd[l], mid[l][0]))),
+        );
+        vst1q_u8(
+            node.add(16),
+            vrev32q_u8(vreinterpretq_u8_u32(vaddq_u32(efgh[l], mid[l][1]))),
+        );
         out[l][NODE_SIZE - 1] &= 0b0011_1111;
     }
 }

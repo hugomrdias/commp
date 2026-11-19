@@ -69,7 +69,10 @@ impl super::Vector for Avx512 {
             let lo = load_half(&msgs[..8], half);
             let hi = load_half(&msgs[8..], half);
             for j in 0..8 {
-                w[8 * half + j] = Avx512(_mm512_inserti64x4::<1>(_mm512_castsi256_si512(lo[j]), hi[j]));
+                w[8 * half + j] = Avx512(_mm512_inserti64x4::<1>(
+                    _mm512_castsi256_si512(lo[j]),
+                    hi[j],
+                ));
             }
         }
         w

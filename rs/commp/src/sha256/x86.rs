@@ -26,7 +26,8 @@ macro_rules! rounds {
             for $l in 0..$n {
                 let kw = $kw;
                 $cdgh[$l] = _mm_sha256rnds2_epu32($cdgh[$l], $abef[$l], kw);
-                $abef[$l] = _mm_sha256rnds2_epu32($abef[$l], $cdgh[$l], _mm_shuffle_epi32(kw, 0x0e));
+                $abef[$l] =
+                    _mm_sha256rnds2_epu32($abef[$l], $cdgh[$l], _mm_shuffle_epi32(kw, 0x0e));
                 $update;
             }
         });
@@ -42,7 +43,10 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
     let hgfe = _mm_loadu_si128(IV.as_ptr().add(4) as *const __m128i);
     let cdab = _mm_shuffle_epi32(dcba, 0xb1);
     let efgh = _mm_shuffle_epi32(hgfe, 0x1b);
-    let iv = [_mm_alignr_epi8(cdab, efgh, 8), _mm_blend_epi16(efgh, cdab, 0xf0)];
+    let iv = [
+        _mm_alignr_epi8(cdab, efgh, 8),
+        _mm_blend_epi16(efgh, cdab, 0xf0),
+    ];
 
     // w[lane][j] holds schedule words 4j..4j+4, overwritten in place by
     // the words 16 later
@@ -51,18 +55,33 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
     let mut w = [[_mm_setzero_si128(); 4]; N];
     for (w, msg) in w.iter_mut().zip(msgs) {
         for (j, word) in w.iter_mut().enumerate() {
-            *word = _mm_shuffle_epi8(_mm_loadu_si128(msg.as_ptr().add(16 * j) as *const __m128i), mask);
+            *word = _mm_shuffle_epi8(
+                _mm_loadu_si128(msg.as_ptr().add(16 * j) as *const __m128i),
+                mask,
+            );
         }
     }
     let mut abef = [iv[0]; N];
     let mut cdgh = [iv[1]; N];
-    rounds!(abef, cdgh, N, |g, l| _mm_add_epi32(w[l][g % 4], _mm_loadu_si128(K.as_ptr().add(4 * g) as *const __m128i)), {
-        if g < 12 {
-            let next = _mm_sha256msg1_epu32(w[l][g % 4], w[l][(g + 1) % 4]);
-            let next = _mm_add_epi32(next, _mm_alignr_epi8(w[l][(g + 3) % 4], w[l][(g + 2) % 4], 4));
-            w[l][g % 4] = _mm_sha256msg2_epu32(next, w[l][(g + 3) % 4]);
+    rounds!(
+        abef,
+        cdgh,
+        N,
+        |g, l| _mm_add_epi32(
+            w[l][g % 4],
+            _mm_loadu_si128(K.as_ptr().add(4 * g) as *const __m128i)
+        ),
+        {
+            if g < 12 {
+                let next = _mm_sha256msg1_epu32(w[l][g % 4], w[l][(g + 1) % 4]);
+                let next = _mm_add_epi32(
+                    next,
+                    _mm_alignr_epi8(w[l][(g + 3) % 4], w[l][(g + 2) % 4], 4),
+                );
+                w[l][g % 4] = _mm_sha256msg2_epu32(next, w[l][(g + 3) % 4]);
+            }
         }
-    });
+    );
 
     // Second block: the padding, whose K + W is precomputed
     let mut mid = [[_mm_setzero_si128(); 2]; N];
@@ -71,7 +90,13 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
         cdgh[l] = _mm_add_epi32(cdgh[l], iv[1]);
         mid[l] = [abef[l], cdgh[l]];
     }
-    rounds!(abef, cdgh, N, |g, l| _mm_loadu_si128(PAD_KW.as_ptr().add(4 * g) as *const __m128i), {});
+    rounds!(
+        abef,
+        cdgh,
+        N,
+        |g, l| _mm_loadu_si128(PAD_KW.as_ptr().add(4 * g) as *const __m128i),
+        {}
+    );
 
     for l in 0..N {
         let abef = _mm_add_epi32(abef[l], mid[l][0]);

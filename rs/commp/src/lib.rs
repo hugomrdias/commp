@@ -73,9 +73,9 @@ const BATCH_LEAVES: usize = BATCH_QUADS * 2;
 const BATCH_LEVEL: usize = BATCH_LEAVES.trailing_zeros() as usize;
 
 /// One-shot digest: returns full multihash-encoded CommP
-/// 
+///
 /// Format: [code (varint 0x1011), size (varint), padding (varint), height (u8), root (32 bytes)]
-/// 
+///
 /// Use this when you need the complete Filecoin piece commitment with metadata.
 /// The multihash code 0x1011 identifies this as "fr32-sha256-trunc254-padded-binary-tree".
 #[wasm_bindgen]
@@ -86,7 +86,7 @@ pub fn digest(data: &[u8]) -> Result<Vec<u8>, JsValue> {
 }
 
 /// One-shot root: returns just the 32-byte CommP root hash
-/// 
+///
 /// Use this when you only need the raw hash without multihash encoding.
 /// This is the Merkle root of the FR32-padded, SHA256-hashed binary tree.
 #[wasm_bindgen]

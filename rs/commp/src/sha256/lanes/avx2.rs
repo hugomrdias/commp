@@ -6,7 +6,12 @@ use core::arch::x86_64::*;
 /// Reverses the bytes of each `u32` (SHA-256 words are big-endian)
 #[inline(always)]
 pub(super) unsafe fn bswap_mask() -> __m256i {
-    _mm256_set_epi64x(0x1c1d1e1f_18191a1b, 0x14151617_10111213, 0x0c0d0e0f_08090a0b, 0x04050607_00010203)
+    _mm256_set_epi64x(
+        0x1c1d1e1f_18191a1b,
+        0x14151617_10111213,
+        0x0c0d0e0f_08090a0b,
+        0x04050607_00010203,
+    )
 }
 
 /// Transpose an 8x8 matrix of `u32`: lane `l` of `out[j]` is lane `j`
@@ -61,7 +66,10 @@ pub(super) unsafe fn store8(s: [__m256i; 8], out: &mut [[u8; NODE_SIZE]]) {
     let mask = bswap_mask();
     let nodes = transpose8(s);
     for l in 0..8 {
-        _mm256_storeu_si256(out[l].as_mut_ptr() as *mut __m256i, _mm256_shuffle_epi8(nodes[l], mask));
+        _mm256_storeu_si256(
+            out[l].as_mut_ptr() as *mut __m256i,
+            _mm256_shuffle_epi8(nodes[l], mask),
+        );
     }
 }
 
@@ -106,7 +114,10 @@ impl super::Vector for Avx2 {
     }
     #[inline(always)]
     unsafe fn rotr<const R: i32, const L: i32>(self) -> Self {
-        Avx2(_mm256_or_si256(_mm256_srli_epi32::<R>(self.0), _mm256_slli_epi32::<L>(self.0)))
+        Avx2(_mm256_or_si256(
+            _mm256_srli_epi32::<R>(self.0),
+            _mm256_slli_epi32::<L>(self.0),
+        ))
     }
     #[inline(always)]
     unsafe fn load_messages(msgs: &[[u8; 64]]) -> [Self; 16] {

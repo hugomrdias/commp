@@ -11,7 +11,10 @@ fn main() {
         .unwrap_or_default();
     let flags = std::env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
     println!("cargo:rustc-env=RUSTC_VERSION={version}");
-    println!("cargo:rustc-env=COMMP_RUSTFLAGS={}", flags.replace('\x1f', " ").replace('"', "'"));
+    println!(
+        "cargo:rustc-env=COMMP_RUSTFLAGS={}",
+        flags.replace('\x1f', " ").replace('"', "'")
+    );
     println!("cargo:rerun-if-env-changed=CARGO_ENCODED_RUSTFLAGS");
 
     // Versions of the crates that do the hashing, from Cargo.lock
@@ -20,8 +23,11 @@ fn main() {
         .split("[[package]]")
         .filter_map(|pkg| {
             let field = |key: &str| {
-                pkg.lines()
-                    .find_map(|l| l.strip_prefix(key)?.strip_prefix(" = \"")?.strip_suffix('"'))
+                pkg.lines().find_map(|l| {
+                    l.strip_prefix(key)?
+                        .strip_prefix(" = \"")?
+                        .strip_suffix('"')
+                })
             };
             let name = field("name")?;
             ["commp", "sha2", "cpufeatures"]

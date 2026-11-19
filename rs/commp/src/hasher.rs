@@ -5,7 +5,8 @@ use crate::multihash::encode_digest;
 use crate::sha256::hash_many;
 use crate::tree::{reduce, Stack};
 use crate::{
-    BATCH_LEAVES, BATCH_LEVEL, BATCH_QUADS, IN_BYTES_PER_QUAD, MAX_PAYLOAD_SIZE, NODE_SIZE, OUT_BYTES_PER_QUAD,
+    BATCH_LEAVES, BATCH_LEVEL, BATCH_QUADS, IN_BYTES_PER_QUAD, MAX_PAYLOAD_SIZE, NODE_SIZE,
+    OUT_BYTES_PER_QUAD,
 };
 use alloc::{string::String, vec::Vec};
 use wasm_bindgen::prelude::*;
@@ -133,7 +134,8 @@ impl CommPHasher {
     /// Hash a full batch into one subtree root and push it onto the stack
     fn flush_batch(&mut self) {
         let root = batch_root(&self.batch);
-        self.stack.push_at(root, BATCH_LEVEL, &mut self.concat_buffer);
+        self.stack
+            .push_at(root, BATCH_LEVEL, &mut self.concat_buffer);
         self.batch.clear();
     }
 
@@ -151,13 +153,19 @@ impl CommPHasher {
             .zip(input[..count * BATCH_BYTES].par_chunks_exact(BATCH_BYTES))
             .for_each(|(root, batch)| {
                 let mut padded = [[0u8; OUT_BYTES_PER_QUAD]; BATCH_QUADS];
-                for (quad, out) in batch.as_chunks::<IN_BYTES_PER_QUAD>().0.iter().zip(&mut padded) {
+                for (quad, out) in batch
+                    .as_chunks::<IN_BYTES_PER_QUAD>()
+                    .0
+                    .iter()
+                    .zip(&mut padded)
+                {
                     fr32_pad(quad, out);
                 }
                 *root = batch_root(&padded);
             });
         for &root in &roots[..count] {
-            self.stack.push_at(root, BATCH_LEVEL, &mut self.concat_buffer);
+            self.stack
+                .push_at(root, BATCH_LEVEL, &mut self.concat_buffer);
         }
         count * BATCH_BYTES
     }
@@ -259,9 +267,9 @@ impl CommPHasher {
     }
 
     /// Get the full multihash-encoded digest
-    /// 
+    ///
     /// Returns: [code (varint 0x1011), size (varint), padding (varint), height (u8), root (32 bytes)]
-    /// 
+    ///
     /// - `code`: 0x1011 = "fr32-sha256-trunc254-padded-binary-tree" multihash identifier
     /// - `size`: total digest size (padding_len + 1 + 32)
     /// - `padding`: bytes of zero-padding added to reach next power-of-two piece size  
@@ -273,7 +281,7 @@ impl CommPHasher {
     }
 
     /// Get just the 32-byte CommP root hash
-    /// 
+    ///
     /// Returns the raw Merkle root without multihash encoding.
     /// Use `digest()` if you need the full multihash with metadata.
     pub fn root(&self) -> Vec<u8> {
@@ -358,7 +366,9 @@ mod tests {
     #[test]
     fn test_batches_match_naive() {
         let batch_bytes = BATCH_QUADS * IN_BYTES_PER_QUAD;
-        let data: Vec<u8> = (0..batch_bytes * 5 + 1000).map(|i| (i * 7 + i / 251) as u8).collect();
+        let data: Vec<u8> = (0..batch_bytes * 5 + 1000)
+            .map(|i| (i * 7 + i / 251) as u8)
+            .collect();
         let mut sizes = vec![0, 1, 127, 128, 254, 255];
         for k in 1..=5 {
             for delta in [-128isize, -127, -1, 0, 1, 127, 128] {
@@ -382,14 +392,28 @@ mod tests {
         // Large writes take the `parallel` path when it is enabled, starting
         // after any partial quad or batch left by the first write
         let batch_bytes = BATCH_QUADS * IN_BYTES_PER_QUAD;
-        let data: Vec<u8> = (0..batch_bytes * 13 + 500).map(|i| (i * 13 + i / 509) as u8).collect();
+        let data: Vec<u8> = (0..batch_bytes * 13 + 500)
+            .map(|i| (i * 13 + i / 509) as u8)
+            .collect();
         for size in [batch_bytes * 4, batch_bytes * 9 + 1, data.len()] {
             let expected = naive_commp(&data[..size]);
-            for first in [0, 1, 127, 128, batch_bytes / 2 + 3, batch_bytes, batch_bytes + 127] {
+            for first in [
+                0,
+                1,
+                127,
+                128,
+                batch_bytes / 2 + 3,
+                batch_bytes,
+                batch_bytes + 127,
+            ] {
                 let mut hasher = CommPHasher::new();
                 hasher.write(&data[..first]).unwrap();
                 hasher.write(&data[first..size]).unwrap();
-                assert_eq!(hasher.build(), expected, "{size} bytes, first write {first}");
+                assert_eq!(
+                    hasher.build(),
+                    expected,
+                    "{size} bytes, first write {first}"
+                );
             }
         }
     }
@@ -399,7 +423,9 @@ mod tests {
         // With `parallel`, one write of more than `PARALLEL_GROUP` batches is
         // hashed in several groups; compare with small writes, which never are
         let batch_bytes = BATCH_QUADS * IN_BYTES_PER_QUAD;
-        let data: Vec<u8> = (0..batch_bytes * (2 * 256 + 37) + 99).map(|i| (i * 7 + i / 1021) as u8).collect();
+        let data: Vec<u8> = (0..batch_bytes * (2 * 256 + 37) + 99)
+            .map(|i| (i * 7 + i / 1021) as u8)
+            .collect();
         let mut expected = CommPHasher::new();
         for chunk in data.chunks(1000) {
             expected.write(chunk).unwrap();
@@ -472,7 +498,9 @@ mod tests {
         assert_eq!(hasher.digest(), empty);
 
         // After a full batch and a partial quad, then reused
-        let data: Vec<u8> = (0..BATCH_QUADS * IN_BYTES_PER_QUAD * 2 + 64).map(|i| i as u8).collect();
+        let data: Vec<u8> = (0..BATCH_QUADS * IN_BYTES_PER_QUAD * 2 + 64)
+            .map(|i| i as u8)
+            .collect();
         hasher.write(&data).unwrap();
         let _ = hasher.digest();
         hasher.reset();
