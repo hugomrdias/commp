@@ -22,14 +22,14 @@ unsafe fn bswap_mask() -> __m128i {
 /// lane)` may extend that lane's message schedule
 macro_rules! rounds {
     ($abef:ident, $cdgh:ident, $n:expr, |$g:ident, $l:ident| $kw:expr, $update:expr) => {
-        for $g in 0..16 {
+        unroll16!(|$g| {
             for $l in 0..$n {
                 let kw = $kw;
                 $cdgh[$l] = _mm_sha256rnds2_epu32($cdgh[$l], $abef[$l], kw);
                 $abef[$l] = _mm_sha256rnds2_epu32($abef[$l], $cdgh[$l], _mm_shuffle_epi32(kw, 0x0e));
                 $update;
             }
-        }
+        });
     };
 }
 
@@ -46,11 +46,14 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
 
     // w[lane][j] holds schedule words 4j..4j+4, overwritten in place by
     // the words 16 later
-    let mut w: [[__m128i; 4]; N] = core::array::from_fn(|l| {
-        core::array::from_fn(|j| {
-            _mm_shuffle_epi8(_mm_loadu_si128(msgs[l].as_ptr().add(16 * j) as *const __m128i), mask)
-        })
-    });
+    // Plain loops, not `array::from_fn`: closures don't inherit this
+    // function's target features, so their intrinsics would not inline
+    let mut w = [[_mm_setzero_si128(); 4]; N];
+    for (w, msg) in w.iter_mut().zip(msgs) {
+        for (j, word) in w.iter_mut().enumerate() {
+            *word = _mm_shuffle_epi8(_mm_loadu_si128(msg.as_ptr().add(16 * j) as *const __m128i), mask);
+        }
+    }
     let mut abef = [iv[0]; N];
     let mut cdgh = [iv[1]; N];
     rounds!(abef, cdgh, N, |g, l| _mm_add_epi32(w[l][g % 4], _mm_loadu_si128(K.as_ptr().add(4 * g) as *const __m128i)), {
@@ -62,10 +65,12 @@ unsafe fn hash_lanes<const N: usize>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZ
     });
 
     // Second block: the padding, whose K + W is precomputed
-    let mid: [[__m128i; 2]; N] =
-        core::array::from_fn(|l| [_mm_add_epi32(abef[l], iv[0]), _mm_add_epi32(cdgh[l], iv[1])]);
-    let mut abef: [__m128i; N] = core::array::from_fn(|l| mid[l][0]);
-    let mut cdgh: [__m128i; N] = core::array::from_fn(|l| mid[l][1]);
+    let mut mid = [[_mm_setzero_si128(); 2]; N];
+    for l in 0..N {
+        abef[l] = _mm_add_epi32(abef[l], iv[0]);
+        cdgh[l] = _mm_add_epi32(cdgh[l], iv[1]);
+        mid[l] = [abef[l], cdgh[l]];
+    }
     rounds!(abef, cdgh, N, |g, l| _mm_loadu_si128(PAD_KW.as_ptr().add(4 * g) as *const __m128i), {});
 
     for l in 0..N {

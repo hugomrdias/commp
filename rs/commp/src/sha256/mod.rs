@@ -7,6 +7,19 @@
 
 use crate::NODE_SIZE;
 
+/// Runs `$body` with `$g` bound to each of `0..16` in turn, written out so
+/// that every index into the message schedule is a constant: LLVM does not
+/// unroll a 16-step loop this large, which leaves the schedule on the stack
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+macro_rules! unroll16 {
+    (|$g:ident| $body:block) => {
+        unroll16!(@ $g, $body, 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+    };
+    (@ $g:ident, $body:block, $($i:literal)*) => {
+        $( { let $g: usize = $i; $body } )*
+    };
+}
+
 #[cfg(target_arch = "aarch64")]
 mod arm;
 #[cfg(not(target_arch = "wasm32"))]

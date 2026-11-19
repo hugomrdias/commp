@@ -28,6 +28,34 @@ trait Vector: Copy {
     /// Rotate right by `R`; `L` must be `32 - R`
     unsafe fn rotr<const R: i32, const L: i32>(self) -> Self;
 
+    /// The 16 big-endian words of `LANES` messages, message `l` in lane
+    /// `l`. Backends with shuffles override this scalar transpose.
+    #[inline(always)]
+    unsafe fn load_messages(msgs: &[[u8; 64]]) -> [Self; 16] {
+        let mut buf = [0u32; MAX_LANES];
+        let mut w = [Self::splat(0); 16];
+        for (j, word) in w.iter_mut().enumerate() {
+            for (l, msg) in msgs.iter().enumerate() {
+                buf[l] = u32::from_be_bytes(msg[4 * j..4 * j + 4].try_into().unwrap());
+            }
+            *word = Self::load(buf.as_ptr());
+        }
+        w
+    }
+
+    /// Store the state words of `LANES` hashes as big-endian nodes, the
+    /// inverse of [`Vector::load_messages`]
+    #[inline(always)]
+    unsafe fn store_nodes(s: [Self; 8], out: &mut [[u8; NODE_SIZE]]) {
+        let mut buf = [0u32; MAX_LANES];
+        for (k, word) in s.iter().enumerate() {
+            word.store(buf.as_mut_ptr());
+            for (l, node) in out.iter_mut().enumerate() {
+                node[4 * k..4 * k + 4].copy_from_slice(&buf[l].to_be_bytes());
+            }
+        }
+    }
+
     /// `a ^ b ^ c`
     #[inline(always)]
     unsafe fn xor3(a: Self, b: Self, c: Self) -> Self {
@@ -63,17 +91,41 @@ macro_rules! round {
 macro_rules! rounds8 {
     ($s:ident, $i:expr, |$j:ident| $kw:expr) => {{
         let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = $s;
-        let kw = |$j: usize| $kw;
-        round!(a, b, c, d, e, f, g, h, kw($i));
-        round!(h, a, b, c, d, e, f, g, kw($i + 1));
-        round!(g, h, a, b, c, d, e, f, kw($i + 2));
-        round!(f, g, h, a, b, c, d, e, kw($i + 3));
-        round!(e, f, g, h, a, b, c, d, kw($i + 4));
-        round!(d, e, f, g, h, a, b, c, kw($i + 5));
-        round!(c, d, e, f, g, h, a, b, kw($i + 6));
-        round!(b, c, d, e, f, g, h, a, kw($i + 7));
+        round!(a, b, c, d, e, f, g, h, { let $j: usize = $i; $kw });
+        round!(h, a, b, c, d, e, f, g, { let $j: usize = $i + 1; $kw });
+        round!(g, h, a, b, c, d, e, f, { let $j: usize = $i + 2; $kw });
+        round!(f, g, h, a, b, c, d, e, { let $j: usize = $i + 3; $kw });
+        round!(e, f, g, h, a, b, c, d, { let $j: usize = $i + 4; $kw });
+        round!(d, e, f, g, h, a, b, c, { let $j: usize = $i + 5; $kw });
+        round!(c, d, e, f, g, h, a, b, { let $j: usize = $i + 6; $kw });
+        round!(b, c, d, e, f, g, h, a, { let $j: usize = $i + 7; $kw });
         $s = [a, b, c, d, e, f, g, h];
     }};
+}
+
+/// Runs `$body` with `$i` bound to each round group start `0, 8, .., 56`,
+/// written out so that every index into the message schedule is a
+/// constant: LLVM does not unroll a loop this large, which leaves the
+/// schedule on the stack
+macro_rules! unroll8 {
+    (|$i:ident| $body:block) => {
+        unroll8!(@ $i, $body, 0 8 16 24 32 40 48 56)
+    };
+    (@ $i:ident, $body:block, $($n:literal)*) => {
+        $( { let $i: usize = $n; $body } )*
+    };
+}
+
+/// `state + s`, lane-wise. Plain loops here, not `array::from_fn` or
+/// `map`: closures don't inherit the caller's target features, so their
+/// intrinsics would not inline.
+#[inline(always)]
+unsafe fn add_state<V: Vector>(state: [V; 8], s: [V; 8]) -> [V; 8] {
+    let mut out = state;
+    for k in 0..8 {
+        out[k] = out[k].add(s[k]);
+    }
+    out
 }
 
 /// Compress the message block; `w` holds its 16 words and is used as the
@@ -81,7 +133,7 @@ macro_rules! rounds8 {
 #[inline(always)]
 unsafe fn compress_message<V: Vector>(state: [V; 8], w: &mut [V; 16]) -> [V; 8] {
     let mut s = state;
-    for i in (0..64).step_by(8) {
+    unroll8!(|i| {
         if i >= 16 {
             for j in i..i + 8 {
                 let w15 = w[(j - 15) & 15];
@@ -92,68 +144,65 @@ unsafe fn compress_message<V: Vector>(state: [V; 8], w: &mut [V; 16]) -> [V; 8] 
             }
         }
         rounds8!(s, i, |j| w[j & 15].add(V::splat(K[j])));
-    }
-    core::array::from_fn(|k| state[k].add(s[k]))
+    });
+    add_state(state, s)
 }
 
 /// Compress the constant padding block, whose schedule is precomputed
 #[inline(always)]
 unsafe fn compress_padding<V: Vector>(state: [V; 8]) -> [V; 8] {
     let mut s = state;
-    for i in (0..64).step_by(8) {
+    unroll8!(|i| {
         rounds8!(s, i, |j| V::splat(PAD_KW[j]));
-    }
-    core::array::from_fn(|k| state[k].add(s[k]))
+    });
+    add_state(state, s)
 }
 
 /// Hash `V::LANES` independent 64-byte messages into truncated nodes
 #[inline(always)]
 unsafe fn hash_group<V: Vector>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
-    const { assert!(V::LANES <= MAX_LANES) };
-    // Transposes go through this buffer: lane `l` of a vector is `buf[l]`
-    let mut buf = [0u32; MAX_LANES];
-    let mut w: [V; 16] = [V::splat(0); 16];
-    for (j, word) in w.iter_mut().enumerate() {
-        for (l, msg) in msgs.iter().enumerate() {
-            buf[l] = u32::from_be_bytes(msg[4 * j..4 * j + 4].try_into().unwrap());
-        }
-        *word = V::load(buf.as_ptr());
+    let mut w = V::load_messages(msgs);
+    let mut iv = [V::splat(0); 8];
+    for k in 0..8 {
+        iv[k] = V::splat(IV[k]);
     }
-
-    let mid = compress_message(IV.map(|x| V::splat(x)), &mut w);
-    let s = compress_padding(mid);
-
-    for (k, word) in s.iter().enumerate() {
-        word.store(buf.as_mut_ptr());
-        for (l, node) in out.iter_mut().enumerate() {
-            node[4 * k..4 * k + 4].copy_from_slice(&buf[l].to_be_bytes());
-        }
-    }
-    for node in out.iter_mut() {
-        node[NODE_SIZE - 1] &= 0b0011_1111;
-    }
+    let mid = compress_message(iv, &mut w);
+    let mut s = compress_padding(mid);
+    // Truncate to 254 bits: the top two bits of the node's last byte, the
+    // low byte of the big-endian word 7
+    s[7] = s[7].and(V::splat(0xffff_ff3f));
+    V::store_nodes(s, out);
 }
 
 /// Hash many 64-byte messages into truncated nodes, `V::LANES` at a time
 #[inline(always)]
 unsafe fn hash_many<V: Vector>(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
+    const { assert!(V::LANES <= MAX_LANES) };
+    let lanes = V::LANES;
     let out = &mut out[..msgs.len()];
-    let mut msg_groups = msgs.chunks_exact(V::LANES);
-    let mut out_groups = out.chunks_exact_mut(V::LANES);
-    for (m, o) in (&mut msg_groups).zip(&mut out_groups) {
-        hash_group::<V>(m, o);
+    let groups = msgs.len() / lanes;
+    let rest = msgs.len() % lanes;
+    // A short last group of 2 or more is zero-padded and hashed in the
+    // same loop, from these buffers: one call site, so the unrolled rounds
+    // are inlined once. A lone message is cheaper scalar.
+    let padded = rest > 1;
+    let mut pad_msgs = [[0u8; 64]; MAX_LANES];
+    let mut pad_out = [[0u8; NODE_SIZE]; MAX_LANES];
+    if padded {
+        pad_msgs[..rest].copy_from_slice(&msgs[groups * lanes..]);
     }
-    // A lone message is cheaper scalar; more share one zero-padded group
-    match (msg_groups.remainder(), out_groups.into_remainder()) {
-        ([], _) => {}
-        ([msg], [node]) => *node = truncated_hash_64(msg),
-        (rest, nodes) => {
-            let mut group = [[0u8; 64]; MAX_LANES];
-            let mut out = [[0u8; NODE_SIZE]; MAX_LANES];
-            group[..rest.len()].copy_from_slice(rest);
-            hash_group::<V>(&group[..V::LANES], &mut out[..V::LANES]);
-            nodes.copy_from_slice(&out[..nodes.len()]);
-        }
+    for g in 0..groups + padded as usize {
+        let (src, dst) = if g < groups {
+            (&msgs[g * lanes..][..lanes], &mut out[g * lanes..][..lanes])
+        } else {
+            (&pad_msgs[..lanes], &mut pad_out[..lanes])
+        };
+        hash_group::<V>(src, dst);
+    }
+    if padded {
+        out[groups * lanes..].copy_from_slice(&pad_out[..rest]);
+    } else if rest == 1 {
+        out[groups * lanes] = truncated_hash_64(&msgs[groups * lanes]);
     }
 }
 
@@ -232,7 +281,7 @@ pub unsafe fn hash_many_neon(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
 }
 
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx512f")]
+#[target_feature(enable = "avx512f,avx2")]
 pub unsafe fn hash_many_avx512(msgs: &[[u8; 64]], out: &mut [[u8; NODE_SIZE]]) {
     hash_many::<avx512::Avx512>(msgs, out)
 }
