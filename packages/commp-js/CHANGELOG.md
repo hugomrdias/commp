@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/hugomrdias/commp/compare/commp-js-v0.1.2...commp-js-v0.1.3) (2026-11-19)
+
+
+### Bug Fixes
+
+* deprecate MIN_PAYLOAD_SIZE and test FRC-0069 vectors ([#48](https://github.com/hugomrdias/commp/issues/48)) ([9842736](https://github.com/hugomrdias/commp/commit/9842736365ce2d82e1e0e2e68dd3a8e20d25d91a))
+
 ## [0.1.2](https://github.com/hugomrdias/commp/compare/commp-js-v0.1.1...commp-js-v0.1.2) (2026-10-16)
 
 
