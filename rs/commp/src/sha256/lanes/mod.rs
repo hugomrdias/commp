@@ -15,6 +15,11 @@ const MAX_LANES: usize = 16;
 /// they are only reached through the `hash_many_*` entry points below.
 trait Vector: Copy {
     const LANES: usize;
+    /// Write all 64 rounds out rather than loop over groups of 8. Faster
+    /// where the unrolled code still fits the instruction cache (AVX-512,
+    /// with 3-input logic and real rotates); a loss on backends whose
+    /// rounds take many more instructions.
+    const UNROLL: bool = true;
     unsafe fn splat(x: u32) -> Self;
     /// Load `LANES` words
     unsafe fn load(src: *const u32) -> Self;
@@ -103,13 +108,17 @@ macro_rules! rounds8 {
     }};
 }
 
-/// Runs `$body` with `$i` bound to each round group start `0, 8, .., 56`,
-/// written out so that every index into the message schedule is a
-/// constant: LLVM does not unroll a loop this large, which leaves the
-/// schedule on the stack
-macro_rules! unroll8 {
-    (|$i:ident| $body:block) => {
-        unroll8!(@ $i, $body, 0 8 16 24 32 40 48 56)
+/// Runs `$body` with `$i` bound to each round group start `0, 8, .., 56`.
+/// If `V::UNROLL`, the groups are written out so that every index into the
+/// message schedule is a constant (LLVM does not unroll a loop this large,
+/// which leaves the schedule on the stack); else they stay a loop.
+macro_rules! round_groups {
+    ($v:ty, |$i:ident| $body:block) => {
+        if <$v>::UNROLL {
+            round_groups!(@ $i, $body, 0 8 16 24 32 40 48 56);
+        } else {
+            for $i in (0..64).step_by(8) $body
+        }
     };
     (@ $i:ident, $body:block, $($n:literal)*) => {
         $( { let $i: usize = $n; $body } )*
@@ -133,7 +142,7 @@ unsafe fn add_state<V: Vector>(state: [V; 8], s: [V; 8]) -> [V; 8] {
 #[inline(always)]
 unsafe fn compress_message<V: Vector>(state: [V; 8], w: &mut [V; 16]) -> [V; 8] {
     let mut s = state;
-    unroll8!(|i| {
+    round_groups!(V, |i| {
         if i >= 16 {
             for j in i..i + 8 {
                 let w15 = w[(j - 15) & 15];
@@ -152,7 +161,7 @@ unsafe fn compress_message<V: Vector>(state: [V; 8], w: &mut [V; 16]) -> [V; 8] 
 #[inline(always)]
 unsafe fn compress_padding<V: Vector>(state: [V; 8]) -> [V; 8] {
     let mut s = state;
-    unroll8!(|i| {
+    round_groups!(V, |i| {
         rounds8!(s, i, |j| V::splat(PAD_KW[j]));
     });
     add_state(state, s)
@@ -213,6 +222,7 @@ struct Pair<V>(V, V);
 
 impl<V: Vector> Vector for Pair<V> {
     const LANES: usize = 2 * V::LANES;
+    const UNROLL: bool = V::UNROLL;
     #[inline(always)]
     unsafe fn splat(x: u32) -> Self {
         Pair(V::splat(x), V::splat(x))

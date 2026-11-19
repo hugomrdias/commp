@@ -70,6 +70,8 @@ pub struct Avx2(__m256i);
 
 impl super::Vector for Avx2 {
     const LANES: usize = 8;
+    // ~5k instructions unrolled, past the uop cache: measured slower than the loop
+    const UNROLL: bool = false;
     #[inline(always)]
     unsafe fn splat(x: u32) -> Self {
         Avx2(_mm256_set1_epi32(x as i32))
